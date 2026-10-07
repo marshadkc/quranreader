@@ -1,6 +1,6 @@
 # Sources
 
-`morphology-fatiha-juz30.txt` holds the rows for Sūrah 1 and Sūrahs 78–114 from
+`morphology.txt` is the full morphology file for all 114 sūrahs from
 [quran-morphology](https://github.com/mustafa0x/quran-morphology) (commit `8f38b39`),
 a corrected fork of the [Quranic Arabic Corpus](https://corpus.quran.com) morphology v0.4.
 It gives the Arabic text of every word, split into its parts, with each part's base word (lemma) and root.

@@ -1,4 +1,5 @@
-// Quran Word Reader: reader with fading meanings, practice quiz, word parts and the Ayah Honeycomb.
+// Quran Word Reader: sūrah sidebar, reader with fading meanings, āyah and word search,
+// practice quiz, word parts and the Ayah Honeycomb.
 import { renderHive } from "./hive.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -22,52 +23,175 @@ export function addHoney(n) { state.honey += n; store.set("honey", state.honey);
 const LABEL = ["new", "learning", "almost", "known"];
 
 // ---------- data ----------
-let INDEX = null;
+let INDEX = null, ROOTS = null, FORMS = null;
 const SURAH = new Map();
+const json = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); };
 export async function index() {
-  if (!INDEX) INDEX = await (await fetch("data/surahs.json")).json();
+  if (!INDEX) INDEX = await json("data/surahs.json");
   return INDEX;
 }
 export async function surah(n) {
   if (!SURAH.has(n)) {
-    const d = await (await fetch(`data/s/${String(n).padStart(3, "0")}.json`)).json();
+    const d = await json(`data/s/${String(n).padStart(3, "0")}.json`);
     d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; }));
     SURAH.set(n, d);
   }
   return SURAH.get(n);
 }
-export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // Al-Fatihah, then An-Nas back to An-Naba
+const roots = async () => (ROOTS ||= await json("data/index/roots.json"));
+const forms = async () => (FORMS ||= await json("data/index/forms.json"));
+export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // the course: Al-Fatihah, then An-Nas back to An-Naba
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 export const arHTML = (w) => w.p.map(([t, k]) => (k === "s" ? esc(t) : `<span class="${k}">${esc(t)}</span>`)).join("");
 export const hasMeaning = (w) => !!(w.en || w.ur);
 export const meaningOf = (w, lang) => (lang === "ur" ? w.ur : w.en) || w.en || w.ur || "";
 
+// Search spelling, the same as norm() in tools/build_data.py, plus Urdu/Persian keyboard letters
+const FOLD = { "ٱ": "ا", "أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ئ": "ي", "ؤ": "و", "ة": "ه", "ۥ": "", "ۦ": "", "ی": "ي", "ے": "ي", "ک": "ك", "ہ": "ه", "ۃ": "ه", "ھ": "ه" };
+export const norm = (t) => t.replace(/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g, "").replace(/[ٱأإآىئؤةۥۦیےکہۃھ]/g, (c) => FOLD[c]).replace(/[^ء-ي]/g, "");
+const spaced = (r) => [...r].join(" ");
+const keyLabel = (k) => (k.startsWith("=") ? k.slice(1) : spaced(k));
+
 function unaided(ws) {
   if (!ws.length) return 0;
   return Math.round((ws.filter((w) => lv(w.l) >= 3).length / ws.length) * 100);
 }
 const allWords = (d) => d.ayahs.flatMap((a) => a.w);
+const place = (x) => ({ s: Math.floor(x / 1e6), a: Math.floor(x / 1000) % 1000, w: x % 1000 });
+
+// ---------- sidebar ----------
+const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[ʿʾ'’\-\s]/g, "").toLowerCase();
+async function sidebar() {
+  const idx = await index();
+  $("#surahs").innerHTML = idx.surahs.map((s) => `<li data-n="${s.n}" data-q="${esc(fold(s.en) + "|" + fold(s.meaning) + "|" + norm(s.ar))}">
+    <a href="#/s/${s.n}"><span class="sn">${s.n}</span>
+    <span class="nm">${esc(s.en)}${s.course ? `<span class="tag">course</span>` : ""}<small>${esc(s.meaning)} · ${s.ayahs} āyāt</small></span>
+    <span class="an">${esc(s.ar)}</span></a></li>`).join("");
+  activeSurah(route.surah);
+}
+function activeSurah(n) {
+  document.querySelectorAll("#surahs a").forEach((a) => {
+    if (+a.parentNode.dataset.n === n) { a.setAttribute("aria-current", "page"); a.scrollIntoView({ block: "nearest" }); }
+    else a.removeAttribute("aria-current");
+  });
+}
+function drawer(open) {
+  $("#side").classList.toggle("open", open);
+  $("#scrim").hidden = !open;
+  $("#menu").setAttribute("aria-expanded", open);
+  if (open && matchMedia("(max-width:899px)").matches) $("#filter").focus({ preventScroll: true });
+}
+$("#menu").onclick = () => drawer(!$("#side").classList.contains("open"));
+$("#scrim").onclick = () => drawer(false);
+$("#surahs").onclick = (e) => { if (e.target.closest("a")) drawer(false); };
+addEventListener("keydown", (e) => { if (e.key === "Escape") drawer(false); });
+$("#filter").oninput = (e) => {
+  const raw = e.target.value.trim(), q = fold(raw), qa = norm(raw);
+  document.querySelectorAll("#surahs li").forEach((li) => {
+    const [en, meaning, ar] = li.dataset.q.split("|");
+    li.hidden = !!raw && !(/^\d+$/.test(raw) ? li.dataset.n.startsWith(raw) : (q && (en.includes(q) || meaning.includes(q))) || (qa && ar.includes(qa)));
+  });
+};
+
+// ---------- reading: word cards, the word sheet, fading meanings ----------
+// One reading view is open at a time: its words in order, and the selected word
+let view = { ws: [], sel: null, prog: null };
+
+function wordHTML(w, k, idx) {
+  const pl = w.p.filter((x) => x[1] !== "s").map((x) => (idx.parts[x[2]] || {}).en).filter((x) => x && x !== "—");
+  return `<button class="w lv${hasMeaning(w) ? lv(w.l) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
+    <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
+}
+function versesHTML(ayahs, idx) {
+  let k = 0;
+  const lang = state.lang;
+  return `<div class="verses ${lang === "en" ? "only-en" : lang === "ur" ? "only-ur" : ""}" id="verses">
+    ${ayahs.map((a) => {
+      const faded = a.w.every((w) => lv(w.l) >= 2);
+      return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
+        <span class="vn">﴿${arN(a.n)}﴾</span></div>
+        ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
+      </article>`;
+    }).join("")}</div><div id="sheetbox"></div>`;
+}
+const langHTML = () => `<div class="seg" aria-label="Meaning language">
+  <button data-lang="both" aria-pressed="${state.lang === "both"}">Both</button>
+  <button data-lang="en" aria-pressed="${state.lang === "en"}">English</button>
+  <button data-lang="ur" aria-pressed="${state.lang === "ur"}">اردو</button></div>`;
+
+function sheetHTML(w, idx) {
+  const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
+    const g = idx.parts[key] || {};
+    return `<span class="chip"><span class="ar">${esc(t)}</span> = ${esc(g.en)}${g.ur && g.ur !== "—" ? " · " + esc(g.ur) : ""}</span>`;
+  }).join(" ") || "None";
+  const fam = [...new Set(view.ws.filter((x) => w.r && x.r === w.r && x.t !== w.t).map((x) => x.t))];
+  const key = w.r || "=" + w.l;
+  return `<div class="sheet" id="sheet">
+    <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w.l)]}</div>
+      <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${w.ur ? `<div class="ur">${esc(w.ur)}</div>` : ""}</div>
+      <div class="ar big">${arHTML(w)}</div></div>
+    <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
+      <dt>Base word</dt><dd><span class="ar" style="font-size:22px">${esc(w.l)}</span> <span class="note">· ${w.f} times in the Quran</span></dd>
+      <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc(spaced(w.r))}</span>` : "None"}
+      ${fam.length ? `<div class="note">Same root here: <span class="ar" style="font-size:20px">${fam.map(esc).join("، ")}</span></div>` : ""}</dd></dl>
+    <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
+      <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
+      <button class="btn" data-act="close">Close</button></div></div>`;
+}
+
+// Click handling shared by the sūrah reader and the single-āyah view. Updates in place so long sūrahs stay fast.
+function readingClick(e, idx) {
+  const lb = e.target.closest("[data-lang]");
+  if (lb) {
+    state.lang = lb.dataset.lang; store.set("lang", state.lang);
+    document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === state.lang));
+    $("#verses").className = "verses" + (state.lang === "en" ? " only-en" : state.lang === "ur" ? " only-ur" : "");
+    return;
+  }
+  const btns = () => app.querySelectorAll(".w");
+  const select = (k) => {
+    btns().forEach((b) => b.classList.toggle("sel", +b.dataset.k === k));
+    view.sel = k;
+    $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
+  };
+  const act = e.target.closest("[data-act]");
+  if (act) {
+    const w = view.ws[view.sel];
+    if (act.dataset.act === "know") setLevel(w.l, lv(w.l) + 1);
+    if (act.dataset.act === "again") setLevel(w.l, 0);
+    if (act.dataset.act !== "close") {
+      btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.l === w.l) b.className = `w lv${hasMeaning(x) ? lv(x.l) : 0}`; });
+      if (view.prog) view.prog();
+    }
+    return select(null);
+  }
+  const b = e.target.closest(".w"); if (!b) return;
+  const k = +b.dataset.k, w = view.ws[k];
+  if (hasMeaning(w) && lv(w.l) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w.l, 2); return; }
+  select(k);
+}
 
 // ---------- views ----------
 async function home() {
   const idx = await index();
-  const ready = idx.surahs.filter((s) => s.ready).length;
+  const course = idx.surahs.filter((s) => s.course);
+  const ready = course.filter((s) => s.ready).length;
   const loaded = await Promise.all(ORDER.map(surah));
-  const juz = loaded.filter((d) => d.n !== 1).flatMap(allWords);
-  const pct = unaided(juz);
+  const pct = unaided(loaded.filter((d) => d.n !== 1).flatMap(allWords));
   app.innerHTML = `
     <section class="progress">
-      <div class="eyebrow">Al-Fātiḥah and Juz ʿAmma · ${idx.surahs.reduce((t, s) => t + s.words, 0).toLocaleString()} words</div>
+      <div class="eyebrow">Course · Al-Fātiḥah and Juz ʿAmma · ${course.reduce((t, s) => t + s.words, 0).toLocaleString()} words</div>
       <h1>Read the Quran without a translation</h1>
       <p class="sub">Each word's meaning sits under it and fades as you learn it. Practise, and watch the page turn into plain Arabic.</p>
       <div class="row"><span>Juz ʿAmma read without help</span><strong>${pct}%</strong></div>
       <div class="track"><div class="fill" style="width:${pct}%"></div></div>
     </section>
-    ${ready < idx.surahs.length ? `<div class="banner">Word meanings are added for ${ready} of ${idx.surahs.length} sūrahs so far. The others already show the Arabic, each word's parts and its root.</div>` : ""}
+    <div class="row"><span class="note">All 114 sūrahs are in the sūrah list. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
+    ${ready < course.length ? `<div class="banner">Word meanings are added for ${ready} of ${course.length} course sūrahs so far. Every sūrah already shows the Arabic, each word's parts and its root.</div>` : ""}
     <ul class="list">
       ${ORDER.map((n) => {
-        const s = idx.surahs.find((x) => x.n === n), d = SURAH.get(n), p = unaided(allWords(d));
+        const s = idx.surahs.find((x) => x.n === n), p = unaided(allWords(SURAH.get(n)));
         return `<li><a href="#/s/${n}"><span class="num">${n}</span>
           <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words} words${s.ready ? "" : " · meanings coming"}</small>
           <span class="mini"><i style="width:${p}%"></i></span></span>
@@ -76,76 +200,191 @@ async function home() {
     </ul>`;
 }
 
-let selected = null; // index into the reader's word list
-async function reader(n) {
-  const d = await surah(n), idx = await index(), meta = idx.surahs.find((s) => s.n === n);
-  const ws = allWords(d), pct = unaided(ws);
-  const lang = state.lang;
-  let sheet = "";
-  if (selected !== null && ws[selected]) {
-    const w = ws[selected];
-    const parts = w.p.filter((x) => x[1] !== "s").map(([t, k, key]) => {
-      const g = idx.parts[key] || {};
-      return `<span class="chip"><span class="ar">${esc(t)}</span> = ${esc(g.en)}${g.ur && g.ur !== "—" ? " · " + esc(g.ur) : ""}</span>`;
-    }).join(" ") || "None";
-    const fam = [...new Set(ws.filter((x) => w.r && x.r === w.r && x.t !== w.t).map((x) => x.t))];
-    sheet = `<div class="sheet" id="sheet">
-      <div class="top2"><div><div class="eyebrow">Āyah ${w.a} · ${LABEL[lv(w.l)]}</div>
-        <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${w.ur ? `<div class="ur">${esc(w.ur)}</div>` : ""}</div>
-        <div class="ar big">${arHTML(w)}</div></div>
-      <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
-        <dt>Base word</dt><dd><span class="ar" style="font-size:22px">${esc(w.l)}</span></dd>
-        <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc([...w.r].join(" "))}</span>` : "None"}
-        ${fam.length ? `<div class="note">Same root in this sūrah: <span class="ar" style="font-size:20px">${fam.map(esc).join("، ")}</span></div>` : ""}</dd></dl>
-      <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}<button class="btn" data-act="close">Close</button></div></div>`;
-  }
-  let k = 0;
+async function reader(n, focus) {
+  const idx = await index(), meta = idx.surahs.find((s) => s.n === n);
+  if (!meta) throw new Error(`there is no sūrah ${n}`);
+  const d = await surah(n), ws = allWords(d);
+  const prog = () => {
+    const pct = unaided(ws);
+    $("#prog").innerHTML = `<span>Read without help</span><strong>${pct}% · ${ws.filter((w) => lv(w.l) >= 3).length} of ${ws.length} words</strong>`;
+    $("#progfill").style.width = pct + "%";
+  };
+  view = { ws, sel: null, prog };
   app.innerHTML = `
     <section class="progress">
-      <div class="eyebrow">Sūrah ${n} · ${meta.ayahs} āyāt · ${meta.words} words</div>
-      <div class="row"><h1>${esc(meta.en)}</h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
-      <div class="row"><span>Read without help</span><strong>${pct}% · ${ws.filter((w) => lv(w.l) >= 3).length} of ${ws.length} words</strong></div>
-      <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+      <div class="eyebrow">Sūrah ${n} · ${meta.ayahs} āyāt · ${meta.words.toLocaleString()} words</div>
+      <div class="row"><h1>${esc(meta.en)} <small class="note">${esc(meta.meaning)}</small></h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
+      <div class="row" id="prog"></div>
+      <div class="track"><div class="fill" id="progfill"></div></div>
     </section>
-    <div class="row">
-      <div class="seg" aria-label="Meaning language">
-        <button data-lang="both" aria-pressed="${lang === "both"}">Both</button>
-        <button data-lang="en" aria-pressed="${lang === "en"}">English</button>
-        <button data-lang="ur" aria-pressed="${lang === "ur"}">اردو</button>
-      </div>
-      ${meta.ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}
-    </div>
+    <div class="row">${langHTML()}
+      ${meta.ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
     ${meta.ready ? "" : `<div class="banner">Meanings for this sūrah haven't been added yet. Tap any word to see its parts, base word and root.</div>`}
-    ${sheet}
-    <div class="verses ${lang === "en" ? "only-en" : lang === "ur" ? "only-ur" : ""}">
-    ${d.ayahs.map((a) => {
-      const faded = a.w.every((w) => lv(w.l) >= 2);
-      return `<article class="verse"><div class="words">
-        ${a.w.map((w) => {
-          const i = k++;
-          const pl = w.p.filter((x) => x[1] !== "s").map((x) => (idx.parts[x[2]] || {}).en).filter((x) => x && x !== "—");
-          return `<button class="w lv${hasMeaning(w) ? lv(w.l) : 0}" data-k="${i}"><span class="ar">${arHTML(w)}</span>
-            <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
-        }).join("")}
-        <span class="vn">﴿${arN(a.n)}﴾</span></div>
-        ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
-      </article>`;
-    }).join("")}
-    </div>`;
+    ${versesHTML(d.ayahs, idx)}`;
+  prog();
+  app.onclick = (e) => readingClick(e, idx);
+  const el = focus && document.getElementById("a" + focus);
+  if (el) { el.classList.add("flash"); el.scrollIntoView({ block: "start" }); return true; }
+}
+
+// One āyah on its own, from "Go to an āyah" or a search result. w = a word to open straight away.
+async function ayahView(s, a, w) {
+  const idx = await index(), meta = idx.surahs.find((x) => x.n === s);
+  if (!meta || a < 1 || a > meta.ayahs) {
+    app.innerHTML = `<div class="banner">${meta ? `${esc(meta.en)} has ${meta.ayahs} āyāt, so there is no āyah ${a}.` : `There is no sūrah ${s}. The Quran has 114.`}</div><a class="btn" href="#/search">Back to search</a>`;
+    return;
+  }
+  const d = await surah(s), ay = d.ayahs.find((x) => x.n === a);
+  const prev = a > 1 ? [s, a - 1] : s > 1 ? [s - 1, idx.surahs[s - 2].ayahs] : null;
+  const next = a < meta.ayahs ? [s, a + 1] : s < 114 ? [s + 1, 1] : null;
+  const nav = (p, label) => (p ? `<a class="btn" href="#/ayah/${p[0]}/${p[1]}">${label}</a>` : "<span></span>");
+  view = { ws: ay.w, sel: null, prog: null };
+  app.innerHTML = `
+    <section class="progress">
+      <div class="eyebrow">Sūrah ${s} · āyah ${a} of ${meta.ayahs} · ${ay.w.length} words</div>
+      <div class="row"><h1>${esc(meta.en)} ${s}:${a}</h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
+    </section>
+    <div class="row">${langHTML()}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
+    ${versesHTML([ay], idx)}
+    <div class="row">${nav(prev, `← ${prev ? prev.join(":") : ""}`)}<a class="btn" href="#/search">Search again</a>${nav(next, `${next ? next.join(":") : ""} →`)}</div>`;
+  app.onclick = (e) => readingClick(e, idx);
+  if (w && ay.w[w - 1]) app.querySelector(`.w[data-k="${w - 1}"]`).click();
+}
+
+// ---------- search ----------
+const EXAMPLES = ["رحمة", "علم", "قال", "كتاب", "صبر", "نور", "قلب", "سماء"];
+const refRe = /^\s*(\d{1,3})\s*[:.\s/]\s*(\d{1,3})\s*$/;
+
+function searchForms(idx, q = "", s = route.surah || 1) {
+  return `<section class="card search-grid">
+      <h2>Go to an āyah</h2>
+      <form class="field" id="goto">
+        <label class="sr" for="gs">Sūrah</label>
+        <select id="gs">${idx.surahs.map((x) => `<option value="${x.n}" ${x.n === s ? "selected" : ""}>${x.n}. ${esc(x.en)} (${x.ayahs} āyāt)</option>`).join("")}</select>
+        <label class="sr" for="ga">Āyah number</label>
+        <input id="ga" class="num" type="number" inputmode="numeric" min="1" max="${idx.surahs[s - 1].ayahs}" placeholder="Āyah" required>
+        <button class="btn primary">Show āyah</button>
+      </form>
+    </section>
+    <section class="card search-grid">
+      <h2>Search a word</h2>
+      <form class="field" id="wordf">
+        <label class="sr" for="wq">Arabic word</label>
+        <input id="wq" class="word" type="search" lang="ar" dir="rtl" placeholder="اكتب كلمة" value="${esc(q)}" autocomplete="off" required>
+        <button class="btn primary">Search</button>
+      </form>
+      <p class="note">Type a word in Arabic, with or without vowel marks. You'll get its root with every related word and how often each occurs, then every āyah they appear in. A reference like 2:255 works here too.</p>
+      ${q ? "" : `<div class="examples">${EXAMPLES.map((x) => `<a href="#/word/${encodeURIComponent(x)}" lang="ar">${x}</a>`).join("")}</div>`}
+    </section>`;
+}
+function searchSubmit(e, idx) {
+  e.preventDefault();
+  if (e.target.id === "goto") location.hash = `#/ayah/${$("#gs").value}/${$("#ga").value}`;
+  if (e.target.id === "wordf") {
+    const v = $("#wq").value.trim(), m = v.match(refRe);
+    location.hash = m ? `#/ayah/${+m[1]}/${+m[2]}` : `#/word/${encodeURIComponent(v)}`;
+  }
+}
+function searchWire(idx) {
+  app.onsubmit = (e) => searchSubmit(e, idx);
+  $("#gs").onchange = (e) => { $("#ga").max = idx.surahs[e.target.value - 1].ayahs; };
+}
+
+async function searchPage() {
+  const idx = await index();
+  app.innerHTML = `<h1>Search</h1>${searchForms(idx)}`;
+  searchWire(idx);
+}
+
+// Word search: result 1 is the root and its family with counts, result 2 every āyah they occur in
+const PAGE = 25;
+let wf = null; // { key, lem, form, shown } for the open word search
+async function wordSearch(raw, pick) {
+  const ref = raw.match(refRe);
+  if (ref) return location.replace(`#/ayah/${+ref[1]}/${+ref[2]}`);
+  const idx = await index(), q = norm(raw);
+  const head = `<h1>Search</h1>${searchForms(idx, raw)}`;
+  app.innerHTML = head + `<p class="note">Searching…</p>`;
+  searchWire(idx);
+  if (!q) { app.innerHTML = head + `<div class="banner">Type the word in Arabic letters, for example رحمة.</div>`; return searchWire(idx); }
+  const [F, R] = await Promise.all([forms(), roots()]);
+  let cands = F[q] ? Object.entries(F[q]) : [], exact = cands.length > 0;
+  if (!exact && q.length >= 2) {
+    const agg = new Map();
+    for (const [sp, ks] of Object.entries(F)) if (sp.includes(q)) for (const [k, c] of Object.entries(ks)) agg.set(k, (agg.get(k) || 0) + c);
+    cands = [...agg];
+  }
+  cands.sort((a, b) => b[1] - a[1]);
+  const key = pick && R[pick] ? pick : exact ? cands[0][0] : null;
+  const total = (k) => R[k].reduce((t, [, fs]) => t + fs.reduce((u, [, o]) => u + o.length, 0), 0);
+  const candHTML = (list) => `<div class="cands">${list.slice(0, 12).map(([k]) => `<a class="fc" href="#/word/${encodeURIComponent(raw)}/${encodeURIComponent(k)}" aria-pressed="${k === key}"><span class="ar">${esc(keyLabel(k))}</span><small>${total(k).toLocaleString()}</small></a>`).join("")}</div>`;
+  if (!key) {
+    app.innerHTML = head + (cands.length
+      ? `<section class="card search-grid"><div>No word is spelled exactly <span class="ar">${esc(raw)}</span>. These contain it. Pick one:</div>${candHTML(cands)}</section>`
+      : `<div class="banner"><span class="ar">${esc(raw)}</span> wasn't found in the Quran. Check the spelling, or try the word without its prefixes, like كتاب for والكتاب.</div>`);
+    return searchWire(idx);
+  }
+  if (!wf || wf.key !== key || wf.q !== q) wf = { q, key, lem: -1, form: null, shown: PAGE };
+  // Spellings that differ only in vowels or recitation marks are one form; matching base words come first
+  const lems = R[key].map(([lem, fs]) => {
+    const g = new Map();
+    for (const [t, o] of fs) { const k = norm(t); if (!g.has(k)) g.set(k, [t, []]); g.get(k)[1].push(...o); }
+    return [lem, [...g].map(([k, [t, o]]) => [k, t, o]).sort((a, b) => b[2].length - a[2].length)];
+  });
+  const hit = ([lem, fs]) => fs.some((f) => f[0] === q) || norm(lem) === q;
+  lems.sort((a, b) => hit(b) - hit(a));
+  const occ = lems.flatMap(([, fs], i) => (wf.lem < 0 || wf.lem === i ? fs.filter(([k]) => !wf.form || k === wf.form).flatMap(([, , o]) => o) : [])).sort((a, b) => a - b);
+  const all = lems.flatMap(([, fs]) => fs.flatMap(([, , o]) => o));
+  const ayahs = new Map();
+  for (const x of occ) { const p = place(x), k = p.s * 1000 + p.a; if (!ayahs.has(k)) ayahs.set(k, { s: p.s, a: p.a, w: new Set() }); ayahs.get(k).w.add(p.w); }
+  const groups = [...ayahs.values()];
+  const nAyahs = new Set(all.map((x) => Math.floor(x / 1000))).size, nSurahs = new Set(all.map((x) => Math.floor(x / 1e6))).size;
+  const isRoot = !key.startsWith("=");
+  const filtered = wf.lem >= 0 ? `<span class="ar">${esc(wf.form ? lems[wf.lem][1].find((f) => f[0] === wf.form)[1] : lems[wf.lem][0])}</span>` : "";
+
+  const shown = groups.slice(0, wf.shown);
+  await Promise.all([...new Set(shown.map((g) => g.s))].map(surah));
+  if (wf.key !== key) return; // a newer search started while loading
+  const hits = shown.map((g) => {
+    const meta = idx.surahs[g.s - 1], ay = SURAH.get(g.s).ayahs[g.a - 1], first = Math.min(...g.w);
+    return `<li class="hit"><a class="ref" href="#/ayah/${g.s}/${g.a}/${first}">${esc(meta.en)} ${g.s}:${g.a}</a>
+      <div class="ar">${ay.w.map((w, i) => (g.w.has(i + 1) ? `<mark>${esc(w.t)}</mark>` : esc(w.t))).join(" ")} <span class="vn">﴿${arN(g.a)}﴾</span></div></li>`;
+  }).join("");
+
+  app.innerHTML = head + `
+    ${cands.length > 1 ? `<div class="note">This spelling also matches:</div>${candHTML(cands)}` : ""}
+    <section class="card search-grid">
+      <div class="eyebrow">Result 1 · ${isRoot ? "Root and the words built from it" : "Base word (it has no root)"}</div>
+      <div class="rootbig">${esc(keyLabel(key))}</div>
+      <div class="stats">
+        <div class="stat"><strong>${all.length.toLocaleString()}</strong><span>times in the Quran</span></div>
+        <div class="stat"><strong>${nAyahs.toLocaleString()}</strong><span>āyāt</span></div>
+        <div class="stat"><strong>${nSurahs}</strong><span>sūrahs</span></div>
+        ${isRoot ? `<div class="stat"><strong>${lems.length}</strong><span>base words</span></div>` : ""}
+      </div>
+      <p class="note">Tap a base word or a spelling to list only its āyāt. The spelling you searched is outlined.</p>
+      <div class="lemmas">${lems.map(([lem, fs], i) => `<div class="lemma">
+        <h3><button class="fc" data-lem="${i}" aria-pressed="${wf.lem === i && !wf.form}"><span class="ar">${esc(lem)}</span><small>${fs.reduce((t, [, , o]) => t + o.length, 0).toLocaleString()} times</small></button></h3>
+        <div class="formchips">${fs.map(([k, t, o]) => `<button class="fc${k === q ? " match" : ""}" data-lem="${i}" data-form="${esc(k)}" aria-pressed="${wf.form === k}"><span class="ar">${esc(t)}</span><small>${o.length}</small></button>`).join("")}</div>
+      </div>`).join("")}</div>
+    </section>
+    <section class="search-grid">
+      <div class="row"><h2>Result 2 · ${groups.length.toLocaleString()} āyāt ${filtered ? `with ${filtered}` : ""}</h2>
+        ${wf.lem >= 0 ? `<button class="btn" data-all>Show all forms</button>` : ""}</div>
+      <ol class="hits">${hits}</ol>
+      ${groups.length > wf.shown ? `<div class="pager"><span class="note">Showing ${shown.length} of ${groups.length}</span><button class="btn" data-more>Show ${Math.min(PAGE, groups.length - wf.shown)} more</button></div>` : ""}
+    </section>`;
+  searchWire(idx);
   app.onclick = (e) => {
-    const lb = e.target.closest("[data-lang]");
-    if (lb) { state.lang = lb.dataset.lang; store.set("lang", state.lang); return reader(n); }
-    const act = e.target.closest("[data-act]");
-    if (act) {
-      const w = ws[selected];
-      if (act.dataset.act === "know") setLevel(w.l, lv(w.l) + 1);
-      if (act.dataset.act === "again") setLevel(w.l, 0);
-      selected = null; return reader(n);
-    }
-    const b = e.target.closest(".w"); if (!b) return;
-    const i = +b.dataset.k, w = ws[i];
-    if (hasMeaning(w) && lv(w.l) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w.l, 2); return; }
-    selected = i; reader(n);
+    const b = e.target.closest("button"); if (!b) return;
+    const y = scrollY;
+    if (b.dataset.more !== undefined) wf.shown += PAGE;
+    else if (b.dataset.all !== undefined) Object.assign(wf, { lem: -1, form: null, shown: PAGE });
+    else if (b.dataset.lem !== undefined) {
+      const lem = +b.dataset.lem, form = b.dataset.form || null;
+      Object.assign(wf, wf.lem === lem && wf.form === form ? { lem: -1, form: null } : { lem, form }, { shown: PAGE });
+    } else return;
+    wordSearch(raw, key).then(() => scrollTo(0, y));
   };
 }
 
@@ -209,13 +448,12 @@ async function parts() {
     <div class="card tbl"><table><thead><tr><th>Part</th><th>Meaning</th><th>اردو</th><th>Times</th><th>Example</th></tr></thead><tbody>
     ${rows.map(([key, e]) => { const g = idx.parts[key] || {}; return `<tr><td class="ar p" style="font-size:24px">${[...e.forms].slice(0, 3).map(esc).join(" ")}</td><td>${esc(g.en)}</td><td class="ur">${esc(g.ur)}</td><td>${e.count}</td><td class="ar" style="font-size:20px">${e.ex.map(esc).join("، ")}</td></tr>`; }).join("")}
     </tbody></table></div>`;
-  app.onclick = null;
 }
 
 function about() {
   app.innerHTML = `<h1>About</h1>
-    <div class="card"><p>Quran Word Reader helps you understand Al-Fātiḥah and Juz ʿAmma directly in Arabic. Each word shows its meaning, which fades as you learn it.</p>
-    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Word meanings are being added from open sources and will be credited here. Your progress stays on this device.</p>
+    <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic. Each word shows its meaning, which fades as you learn it. The course covers Al-Fātiḥah and Juz ʿAmma; every sūrah can be read and searched.</p>
+    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. Word meanings are being added from open sources and will be credited here. Your progress stays on this device.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
@@ -226,26 +464,33 @@ function about() {
 }
 
 // ---------- router ----------
+const TABS = { search: "search", word: "search", ayah: "search", parts: "parts", hive: "hive", about: "about" };
 async function route() {
-  const h = location.hash.replace(/^#\/?/, "").split("/");
-  const tab = h[0] === "parts" ? "parts" : h[0] === "hive" ? "hive" : h[0] === "about" ? "about" : "home";
+  const h = location.hash.replace(/^#\/?/, "").split("/").map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
+  const tab = TABS[h[0]] || (h[0] === "s" ? "" : "home");
   document.querySelectorAll(".tabs a").forEach((a) => (a.dataset.tab === tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
-  app.onclick = null;
+  route.surah = h[0] === "s" || h[0] === "ayah" ? +h[1] || null : null;
+  activeSurah(route.surah);
+  app.onclick = null; app.onsubmit = null;
+  let anchored = false;
   try {
     if (h[0] === "s" && h[1]) {
-      const n = +h[1];
-      if (h[2] === "practise") await practise(n); else { if (route.last !== n) selected = null; route.last = n; await reader(n); }
-    } else if (h[0] === "parts") await parts();
+      if (h[2] === "practise") await practise(+h[1]); else anchored = await reader(+h[1], +h[2] || 0);
+    } else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
+    else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
+    else if (h[0] === "search") await searchPage();
+    else if (h[0] === "parts") await parts();
     else if (h[0] === "hive") await renderHive(app);
     else if (h[0] === "about") about();
     else await home();
   } catch (err) {
     app.innerHTML = `<div class="banner">This page couldn't load (${esc(err.message)}). Check your connection and try again.</div>`;
   }
-  if (!h[2]) window.scrollTo(0, 0);
+  if (!anchored) window.scrollTo(0, 0);
 }
 $("#jar").textContent = state.honey;
 addEventListener("hashchange", route);
+sidebar().catch(() => {});
 route();
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
