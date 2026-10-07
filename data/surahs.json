@@ -1,0 +1,463 @@
+{
+ "surahs": [
+  {
+   "n": 1,
+   "ar": "الفاتحة",
+   "en": "Al-Fatihah",
+   "meaning": "The Opening",
+   "ayahs": 7,
+   "words": 29,
+   "ready": false
+  },
+  {
+   "n": 78,
+   "ar": "النبأ",
+   "en": "An-Naba",
+   "meaning": "The Great News",
+   "ayahs": 40,
+   "words": 173,
+   "ready": false
+  },
+  {
+   "n": 79,
+   "ar": "النازعات",
+   "en": "An-Nazi'at",
+   "meaning": "Those Who Pull Out",
+   "ayahs": 46,
+   "words": 179,
+   "ready": false
+  },
+  {
+   "n": 80,
+   "ar": "عبس",
+   "en": "Abasa",
+   "meaning": "He Frowned",
+   "ayahs": 42,
+   "words": 133,
+   "ready": false
+  },
+  {
+   "n": 81,
+   "ar": "التكوير",
+   "en": "At-Takwir",
+   "meaning": "The Folding Up",
+   "ayahs": 29,
+   "words": 104,
+   "ready": false
+  },
+  {
+   "n": 82,
+   "ar": "الانفطار",
+   "en": "Al-Infitar",
+   "meaning": "The Splitting Open",
+   "ayahs": 19,
+   "words": 80,
+   "ready": false
+  },
+  {
+   "n": 83,
+   "ar": "المطففين",
+   "en": "Al-Mutaffifin",
+   "meaning": "Those Who Give Short Measure",
+   "ayahs": 36,
+   "words": 169,
+   "ready": false
+  },
+  {
+   "n": 84,
+   "ar": "الانشقاق",
+   "en": "Al-Inshiqaq",
+   "meaning": "The Splitting Asunder",
+   "ayahs": 25,
+   "words": 107,
+   "ready": false
+  },
+  {
+   "n": 85,
+   "ar": "البروج",
+   "en": "Al-Buruj",
+   "meaning": "The Great Stars",
+   "ayahs": 22,
+   "words": 109,
+   "ready": false
+  },
+  {
+   "n": 86,
+   "ar": "الطارق",
+   "en": "At-Tariq",
+   "meaning": "The Night Comer",
+   "ayahs": 17,
+   "words": 61,
+   "ready": false
+  },
+  {
+   "n": 87,
+   "ar": "الأعلى",
+   "en": "Al-A'la",
+   "meaning": "The Most High",
+   "ayahs": 19,
+   "words": 72,
+   "ready": false
+  },
+  {
+   "n": 88,
+   "ar": "الغاشية",
+   "en": "Al-Ghashiyah",
+   "meaning": "The Overwhelming Event",
+   "ayahs": 26,
+   "words": 92,
+   "ready": false
+  },
+  {
+   "n": 89,
+   "ar": "الفجر",
+   "en": "Al-Fajr",
+   "meaning": "The Dawn",
+   "ayahs": 30,
+   "words": 137,
+   "ready": false
+  },
+  {
+   "n": 90,
+   "ar": "البلد",
+   "en": "Al-Balad",
+   "meaning": "The City",
+   "ayahs": 20,
+   "words": 82,
+   "ready": false
+  },
+  {
+   "n": 91,
+   "ar": "الشمس",
+   "en": "Ash-Shams",
+   "meaning": "The Sun",
+   "ayahs": 15,
+   "words": 54,
+   "ready": false
+  },
+  {
+   "n": 92,
+   "ar": "الليل",
+   "en": "Al-Layl",
+   "meaning": "The Night",
+   "ayahs": 21,
+   "words": 71,
+   "ready": false
+  },
+  {
+   "n": 93,
+   "ar": "الضحى",
+   "en": "Ad-Duha",
+   "meaning": "The Morning Light",
+   "ayahs": 11,
+   "words": 40,
+   "ready": false
+  },
+  {
+   "n": 94,
+   "ar": "الشرح",
+   "en": "Ash-Sharh",
+   "meaning": "The Opening Up",
+   "ayahs": 8,
+   "words": 27,
+   "ready": false
+  },
+  {
+   "n": 95,
+   "ar": "التين",
+   "en": "At-Tin",
+   "meaning": "The Fig",
+   "ayahs": 8,
+   "words": 34,
+   "ready": false
+  },
+  {
+   "n": 96,
+   "ar": "العلق",
+   "en": "Al-Alaq",
+   "meaning": "The Clinging Clot",
+   "ayahs": 19,
+   "words": 72,
+   "ready": false
+  },
+  {
+   "n": 97,
+   "ar": "القدر",
+   "en": "Al-Qadr",
+   "meaning": "The Night of Decree",
+   "ayahs": 5,
+   "words": 30,
+   "ready": false
+  },
+  {
+   "n": 98,
+   "ar": "البينة",
+   "en": "Al-Bayyinah",
+   "meaning": "The Clear Proof",
+   "ayahs": 8,
+   "words": 94,
+   "ready": false
+  },
+  {
+   "n": 99,
+   "ar": "الزلزلة",
+   "en": "Az-Zalzalah",
+   "meaning": "The Earthquake",
+   "ayahs": 8,
+   "words": 36,
+   "ready": false
+  },
+  {
+   "n": 100,
+   "ar": "العاديات",
+   "en": "Al-Adiyat",
+   "meaning": "The Chargers",
+   "ayahs": 11,
+   "words": 40,
+   "ready": false
+  },
+  {
+   "n": 101,
+   "ar": "القارعة",
+   "en": "Al-Qari'ah",
+   "meaning": "The Striking Calamity",
+   "ayahs": 11,
+   "words": 36,
+   "ready": false
+  },
+  {
+   "n": 102,
+   "ar": "التكاثر",
+   "en": "At-Takathur",
+   "meaning": "Competition in Increase",
+   "ayahs": 8,
+   "words": 28,
+   "ready": false
+  },
+  {
+   "n": 103,
+   "ar": "العصر",
+   "en": "Al-Asr",
+   "meaning": "Time",
+   "ayahs": 3,
+   "words": 14,
+   "ready": false
+  },
+  {
+   "n": 104,
+   "ar": "الهمزة",
+   "en": "Al-Humazah",
+   "meaning": "The Slanderer",
+   "ayahs": 9,
+   "words": 33,
+   "ready": false
+  },
+  {
+   "n": 105,
+   "ar": "الفيل",
+   "en": "Al-Fil",
+   "meaning": "The Elephant",
+   "ayahs": 5,
+   "words": 23,
+   "ready": false
+  },
+  {
+   "n": 106,
+   "ar": "قريش",
+   "en": "Quraysh",
+   "meaning": "Quraysh",
+   "ayahs": 4,
+   "words": 17,
+   "ready": false
+  },
+  {
+   "n": 107,
+   "ar": "الماعون",
+   "en": "Al-Ma'un",
+   "meaning": "Small Kindnesses",
+   "ayahs": 7,
+   "words": 25,
+   "ready": false
+  },
+  {
+   "n": 108,
+   "ar": "الكوثر",
+   "en": "Al-Kawthar",
+   "meaning": "Abundance",
+   "ayahs": 3,
+   "words": 10,
+   "ready": false
+  },
+  {
+   "n": 109,
+   "ar": "الكافرون",
+   "en": "Al-Kafirun",
+   "meaning": "The Disbelievers",
+   "ayahs": 6,
+   "words": 26,
+   "ready": false
+  },
+  {
+   "n": 110,
+   "ar": "النصر",
+   "en": "An-Nasr",
+   "meaning": "The Help",
+   "ayahs": 3,
+   "words": 19,
+   "ready": false
+  },
+  {
+   "n": 111,
+   "ar": "المسد",
+   "en": "Al-Masad",
+   "meaning": "The Palm Fibre",
+   "ayahs": 5,
+   "words": 23,
+   "ready": false
+  },
+  {
+   "n": 112,
+   "ar": "الإخلاص",
+   "en": "Al-Ikhlas",
+   "meaning": "Sincerity",
+   "ayahs": 4,
+   "words": 15,
+   "ready": false
+  },
+  {
+   "n": 113,
+   "ar": "الفلق",
+   "en": "Al-Falaq",
+   "meaning": "The Daybreak",
+   "ayahs": 5,
+   "words": 23,
+   "ready": false
+  },
+  {
+   "n": 114,
+   "ar": "الناس",
+   "en": "An-Nas",
+   "meaning": "Mankind",
+   "ayahs": 6,
+   "words": 20,
+   "ready": false
+  }
+ ],
+ "parts": {
+  "wa": {
+   "ar": null,
+   "en": "and, while",
+   "ur": "اور"
+  },
+  "wa-oath": {
+   "ar": null,
+   "en": "by (an oath)",
+   "ur": "قسم ہے"
+  },
+  "fa": {
+   "ar": null,
+   "en": "so, then",
+   "ur": "پھر، تو"
+  },
+  "bi": {
+   "ar": null,
+   "en": "with, in, by",
+   "ur": "سے، میں"
+  },
+  "li": {
+   "ar": null,
+   "en": "for, to",
+   "ur": "کے لیے"
+  },
+  "li-purpose": {
+   "ar": null,
+   "en": "so that",
+   "ur": "تاکہ"
+  },
+  "la": {
+   "ar": null,
+   "en": "surely",
+   "ur": "یقیناً"
+  },
+  "li-command": {
+   "ar": null,
+   "en": "let",
+   "ur": "چاہیے کہ"
+  },
+  "ka": {
+   "ar": null,
+   "en": "like",
+   "ur": "کی طرح"
+  },
+  "al": {
+   "ar": null,
+   "en": "the",
+   "ur": "—"
+  },
+  "a-question": {
+   "ar": null,
+   "en": "(question)",
+   "ur": "کیا"
+  },
+  "sa": {
+   "ar": null,
+   "en": "will",
+   "ur": "عنقریب"
+  },
+  "ya": {
+   "ar": null,
+   "en": "O",
+   "ur": "اے"
+  },
+  "pron-3MS": {
+   "ar": null,
+   "en": "he, him, his",
+   "ur": "وہ، اس"
+  },
+  "pron-3FS": {
+   "ar": null,
+   "en": "she, it, her",
+   "ur": "وہ، اس"
+  },
+  "pron-3MP": {
+   "ar": null,
+   "en": "they, them, their",
+   "ur": "وہ، ان"
+  },
+  "pron-3FP": {
+   "ar": null,
+   "en": "they, them (f.)",
+   "ur": "وہ، ان"
+  },
+  "pron-3D": {
+   "ar": null,
+   "en": "the two of them",
+   "ur": "وہ دونوں"
+  },
+  "pron-2MS": {
+   "ar": null,
+   "en": "you",
+   "ur": "تو، تیرا"
+  },
+  "pron-2FS": {
+   "ar": null,
+   "en": "you (f.)",
+   "ur": "تو، تیرا"
+  },
+  "pron-2MP": {
+   "ar": null,
+   "en": "you all",
+   "ur": "تم، تمہارا"
+  },
+  "pron-1S": {
+   "ar": null,
+   "en": "I, me, my",
+   "ur": "میں، میرا"
+  },
+  "pron-1P": {
+   "ar": null,
+   "en": "we, us, our",
+   "ur": "ہم، ہمارا"
+  }
+ }
+}
