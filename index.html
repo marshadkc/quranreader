@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quran Word Reader</title>
-<meta name="description" content="Read Al-Fatihah and Juz Amma word by word until you understand the Arabic without a translation.">
+<meta name="description" content="Read the Quran word by word until you understand the Arabic without a translation.">
 <meta name="theme-color" content="#1f6f62">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -16,16 +16,28 @@
 </head>
 <body>
 <header class="top">
+  <button class="menu" id="menu" aria-controls="side" aria-expanded="false">Sūrahs</button>
   <a class="brand" href="#/">Quran Word Reader</a>
+  <nav class="tabs" aria-label="Main">
+    <a href="#/" data-tab="home">Home</a>
+    <a href="#/search" data-tab="search">Search</a>
+    <a href="#/parts" data-tab="parts">Word parts</a>
+    <a href="#/hive" data-tab="hive">Honeycomb</a>
+    <a href="#/about" data-tab="about">About</a>
+  </nav>
   <div class="jar" title="Honey jar"><i class="drop"></i><strong id="jar">0</strong></div>
 </header>
-<main id="app" class="wrap" aria-live="polite"></main>
-<nav class="tabs" aria-label="Main">
-  <a href="#/" data-tab="home">Surahs</a>
-  <a href="#/parts" data-tab="parts">Word parts</a>
-  <a href="#/hive" data-tab="hive">Honeycomb</a>
-  <a href="#/about" data-tab="about">About</a>
-</nav>
+<div class="layout">
+  <aside class="side" id="side" aria-label="Sūrahs">
+    <div class="side-head">
+      <label class="sr" for="filter">Find a sūrah</label>
+      <input id="filter" type="search" placeholder="Find a sūrah by name or number" autocomplete="off">
+    </div>
+    <ol class="surahs" id="surahs"></ol>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <main id="app" class="wrap" aria-live="polite"></main>
+</div>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

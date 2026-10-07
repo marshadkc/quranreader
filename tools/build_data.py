@@ -2,12 +2,14 @@
 """Build the app's JSON data from the morphology source and our own meanings.
 
 Inputs
-  sources/morphology-fatiha-juz30.txt  Quranic Arabic Corpus morphology (see sources/README.md)
+  sources/morphology.txt               Quranic Arabic Corpus morphology (see sources/README.md)
   glosses/NNN.tsv                      word and verse meanings written for this app
 
 Outputs
   data/surahs.json                     list of surahs with counts
   data/s/NNN.json                      one file per surah
+  data/index/roots.json                every root (or base word) with its forms, counts and places
+  data/index/forms.json                normalised spellings -> roots, for the word search
 
 Usage
   python3 tools/build_data.py            build everything
@@ -16,15 +18,92 @@ Usage
 import collections
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "sources" / "morphology-fatiha-juz30.txt"
+SOURCE = ROOT / "sources" / "morphology.txt"
 GLOSSES = ROOT / "glosses"
 OUT = ROOT / "data"
 
 SURAHS = {
     1: ("الفاتحة", "Al-Fatihah", "The Opening"),
+    2: ("البقرة", "Al-Baqarah", "The Cow"),
+    3: ("آل عمران", "Al-Imran", "The Family of Imran"),
+    4: ("النساء", "An-Nisa", "The Women"),
+    5: ("المائدة", "Al-Ma'idah", "The Table Spread"),
+    6: ("الأنعام", "Al-An'am", "The Cattle"),
+    7: ("الأعراف", "Al-A'raf", "The Heights"),
+    8: ("الأنفال", "Al-Anfal", "The Spoils of War"),
+    9: ("التوبة", "At-Tawbah", "The Repentance"),
+    10: ("يونس", "Yunus", "Jonah"),
+    11: ("هود", "Hud", "Hud"),
+    12: ("يوسف", "Yusuf", "Joseph"),
+    13: ("الرعد", "Ar-Ra'd", "The Thunder"),
+    14: ("إبراهيم", "Ibrahim", "Abraham"),
+    15: ("الحجر", "Al-Hijr", "The Rocky Tract"),
+    16: ("النحل", "An-Nahl", "The Bee"),
+    17: ("الإسراء", "Al-Isra", "The Night Journey"),
+    18: ("الكهف", "Al-Kahf", "The Cave"),
+    19: ("مريم", "Maryam", "Mary"),
+    20: ("طه", "Ta-Ha", "Ta-Ha"),
+    21: ("الأنبياء", "Al-Anbiya", "The Prophets"),
+    22: ("الحج", "Al-Hajj", "The Pilgrimage"),
+    23: ("المؤمنون", "Al-Mu'minun", "The Believers"),
+    24: ("النور", "An-Nur", "The Light"),
+    25: ("الفرقان", "Al-Furqan", "The Criterion"),
+    26: ("الشعراء", "Ash-Shu'ara", "The Poets"),
+    27: ("النمل", "An-Naml", "The Ant"),
+    28: ("القصص", "Al-Qasas", "The Stories"),
+    29: ("العنكبوت", "Al-Ankabut", "The Spider"),
+    30: ("الروم", "Ar-Rum", "The Romans"),
+    31: ("لقمان", "Luqman", "Luqman"),
+    32: ("السجدة", "As-Sajdah", "The Prostration"),
+    33: ("الأحزاب", "Al-Ahzab", "The Combined Forces"),
+    34: ("سبأ", "Saba", "Sheba"),
+    35: ("فاطر", "Fatir", "The Originator"),
+    36: ("يس", "Ya-Sin", "Ya-Sin"),
+    37: ("الصافات", "As-Saffat", "Those Ranged in Rows"),
+    38: ("ص", "Sad", "Sad"),
+    39: ("الزمر", "Az-Zumar", "The Groups"),
+    40: ("غافر", "Ghafir", "The Forgiver"),
+    41: ("فصلت", "Fussilat", "Explained in Detail"),
+    42: ("الشورى", "Ash-Shura", "The Consultation"),
+    43: ("الزخرف", "Az-Zukhruf", "The Ornaments of Gold"),
+    44: ("الدخان", "Ad-Dukhan", "The Smoke"),
+    45: ("الجاثية", "Al-Jathiyah", "The Kneeling"),
+    46: ("الأحقاف", "Al-Ahqaf", "The Wind-Curved Sandhills"),
+    47: ("محمد", "Muhammad", "Muhammad"),
+    48: ("الفتح", "Al-Fath", "The Victory"),
+    49: ("الحجرات", "Al-Hujurat", "The Rooms"),
+    50: ("ق", "Qaf", "Qaf"),
+    51: ("الذاريات", "Adh-Dhariyat", "The Winnowing Winds"),
+    52: ("الطور", "At-Tur", "The Mount"),
+    53: ("النجم", "An-Najm", "The Star"),
+    54: ("القمر", "Al-Qamar", "The Moon"),
+    55: ("الرحمن", "Ar-Rahman", "The Most Merciful"),
+    56: ("الواقعة", "Al-Waqi'ah", "The Inevitable Event"),
+    57: ("الحديد", "Al-Hadid", "The Iron"),
+    58: ("المجادلة", "Al-Mujadila", "The Pleading Woman"),
+    59: ("الحشر", "Al-Hashr", "The Exile"),
+    60: ("الممتحنة", "Al-Mumtahanah", "The Woman to be Examined"),
+    61: ("الصف", "As-Saff", "The Ranks"),
+    62: ("الجمعة", "Al-Jumu'ah", "Friday"),
+    63: ("المنافقون", "Al-Munafiqun", "The Hypocrites"),
+    64: ("التغابن", "At-Taghabun", "The Mutual Loss and Gain"),
+    65: ("الطلاق", "At-Talaq", "The Divorce"),
+    66: ("التحريم", "At-Tahrim", "The Prohibition"),
+    67: ("الملك", "Al-Mulk", "The Sovereignty"),
+    68: ("القلم", "Al-Qalam", "The Pen"),
+    69: ("الحاقة", "Al-Haqqah", "The Inevitable Reality"),
+    70: ("المعارج", "Al-Ma'arij", "The Ascending Stairways"),
+    71: ("نوح", "Nuh", "Noah"),
+    72: ("الجن", "Al-Jinn", "The Jinn"),
+    73: ("المزمل", "Al-Muzzammil", "The Enwrapped One"),
+    74: ("المدثر", "Al-Muddaththir", "The Cloaked One"),
+    75: ("القيامة", "Al-Qiyamah", "The Resurrection"),
+    76: ("الإنسان", "Al-Insan", "Man"),
+    77: ("المرسلات", "Al-Mursalat", "Those Sent Forth"),
     78: ("النبأ", "An-Naba", "The Great News"),
     79: ("النازعات", "An-Nazi'at", "Those Who Pull Out"),
     80: ("عبس", "Abasa", "He Frowned"),
@@ -101,6 +180,17 @@ SUFFIX = {
 }
 
 
+COURSE = {1} | set(range(78, 115))  # Al-Fatihah and Juz Amma: the learning course
+
+# Search spelling: drop vowel marks and Quranic signs, and fold letter variants together
+_MARKS = re.compile("[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]")
+_FOLD = str.maketrans({"ٱ": "ا", "أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ئ": "ي", "ؤ": "و", "ة": "ه", "ۥ": "", "ۦ": ""})
+
+
+def norm(t):
+    return _MARKS.sub("", t).translate(_FOLD).replace(" ", "")
+
+
 def feats(s):
     out = {"tags": []}
     for f in s.split("|"):
@@ -148,7 +238,9 @@ def word_entry(segs):
         else:
             merged.append(p)
     lem = stem[2].get("LEM") or "".join(x[0] for x in segs)
+    stem_text = "".join(p[0] for p in merged if p[1] == "s")
     return {
+        "_stem": stem_text,
         "t": "".join(x[0] for x in segs),
         "p": merged,
         "l": lem,
@@ -184,6 +276,8 @@ def build():
     for (s, a, w), segs in words.items():
         by_surah[s][a].append(word_entry(segs))
     index, problems = [], []
+    roots = {}
+    forms = collections.defaultdict(collections.Counter)
     lemma_count = collections.Counter(wd["l"] for s in by_surah.values() for a in s.values() for wd in a)
     (OUT / "s").mkdir(parents=True, exist_ok=True)
     for s in sorted(by_surah):
@@ -200,21 +294,34 @@ def build():
                     for wd, en, ur in zip(ws, ens, urs):
                         wd["en"], wd["ur"] = en, ur
                     glossed += len(ws)
-            for wd in ws:
+            for wi, wd in enumerate(ws, 1):
                 wd["f"] = lemma_count[wd["l"]]
+                key = wd["r"] or "=" + wd["l"]          # root, or the base word for words without a root
+                # root -> base word -> spelling -> places (s*1000000 + ayah*1000 + word number)
+                roots.setdefault(key, {}).setdefault(wd["l"], {}).setdefault(wd["t"], []).append(s * 1000000 + a * 1000 + wi)
+                for spelling in {norm(wd["t"]), norm(wd.pop("_stem")), norm(wd["l"]), norm(wd["r"])}:
+                    if spelling:
+                        forms[spelling][key] += 1
             v = {"n": a, "w": ws}
             if a in gv:
                 v["en"], v["ur"] = gv[a]
             ayahs.append(v)
         nwords = sum(len(v["w"]) for v in ayahs)
         ar, en, meaning = SURAHS[s]
-        index.append({"n": s, "ar": ar, "en": en, "meaning": meaning, "ayahs": len(ayahs), "words": nwords, "ready": glossed == nwords})
+        index.append({"n": s, "ar": ar, "en": en, "meaning": meaning, "ayahs": len(ayahs), "words": nwords, "ready": glossed == nwords, "course": s in COURSE})
         (OUT / "s" / f"{s:03d}.json").write_text(json.dumps({"n": s, "ar": ar, "en": en, "meaning": meaning, "ayahs": ayahs}, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
     parts = {k: {"ar": None, "en": v[1], "ur": v[2]} for v in PREFIX.values() for k in [v[0]]}
     parts.update({"pron-" + k: {"ar": None, "en": v[0], "ur": v[1]} for k, v in SUFFIX.items()})
+    (OUT / "index").mkdir(exist_ok=True)
+    # each root: [[base word, [[spelling, [places...]], ...]], ...], most frequent first
+    size = lambda x: sum(len(o) for o in x.values())
+    roots_out = {k: [[lem, sorted(fs.items(), key=lambda f: -len(f[1]))] for lem, fs in sorted(v.items(), key=lambda x: -size(x[1]))]
+                 for k, v in roots.items()}
+    (OUT / "index" / "roots.json").write_text(json.dumps(roots_out, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
+    (OUT / "index" / "forms.json").write_text(json.dumps({k: dict(v.most_common()) for k, v in sorted(forms.items())}, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
     (OUT / "surahs.json").write_text(json.dumps({"surahs": index, "parts": parts}, ensure_ascii=False, indent=1), encoding="utf8")
     ready = sum(x["ready"] for x in index)
-    print(f"built {len(index)} surahs, {ready} with meanings")
+    print(f"built {len(index)} surahs, {ready} with meanings; {len(roots)} roots and base words, {len(forms)} search spellings")
     if problems:
         print("\n".join(problems))
         sys.exit(1)
