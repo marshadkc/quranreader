@@ -2,7 +2,9 @@
 """Import word-by-word English and Urdu meanings from the Quran.com API into glosses/NNN.tsv.
 
 Run this where the network allows api.quran.com, then run tools/build_data.py.
-Check the license of each resource before publishing the app with it.
+Only commit the result once the owner has agreed in writing: Quran Foundation's developer terms do not allow
+storing their content for more than 7 days or sharing it as a dataset. Until then the app loads the English
+meanings live (see js/app.js) and glosses/ stays empty.
 
 Usage
   python3 tools/import_meanings.py                 all surahs in the app

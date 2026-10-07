@@ -1,7 +1,7 @@
 // Ayah Honeycomb: the Juz Amma review game.
 // An āyah's words lie on a zig-zag path of cells from the right edge of a hexagon-shaped
 // honeycomb to the left edge. Cells are answered in reading order; right = honey, wrong = red.
-import { state, store, lv, surah, ORDER, arN, esc, hasMeaning, meaningOf, addHoney } from "./app.js";
+import { state, store, lv, withMeanings, CREDIT, ORDER, arN, esc, hasMeaning, meaningOf, addHoney } from "./app.js";
 
 const UNLOCK = 80; // % of Juz Amma words known before the game opens
 
@@ -49,14 +49,14 @@ const letters = (t) => t.replace(/[ً-ٰٟۖ-ۭ]/g, "").length;
 let g = null;
 
 export async function renderHive(app) {
-  const loaded = await Promise.all(ORDER.map(surah));
+  const loaded = await Promise.all(ORDER.map(withMeanings));
   const juz = loaded.filter((d) => d.n !== 1);
   const words = juz.flatMap((d) => d.ayahs.flatMap((a) => a.w));
   const pool = juz.flatMap((d) => d.ayahs.filter((a) => a.w.every(hasMeaning)).map((a) => ({ s: d.n, name: d.en, a })));
   const known = Math.round((words.filter((w) => lv(w.l) >= 3).length / words.length) * 100);
   const preview = store.get("hivePreview", false);
   if (!pool.length) {
-    app.innerHTML = `<h1>Ayah Honeycomb</h1><div class="banner">The honeycomb needs word meanings, and none are added yet for Juz ʿAmma. It opens here as soon as they are.</div>`;
+    app.innerHTML = `<h1>Ayah Honeycomb</h1><div class="banner">The honeycomb needs word meanings, and they haven't loaded for Juz ʿAmma yet. They come from Quran.com and need an internet connection at least once a week.</div>`;
     app.onclick = null; return;
   }
   if (known < UNLOCK && !preview) {
@@ -73,7 +73,8 @@ export async function renderHive(app) {
   const deal = () => { g.nums = [...pool].sort(() => Math.random() - 0.5).slice(0, 7); };
   if (!g.nums.length) deal();
 
-  const lang = () => (state.lang === "ur" ? "ur" : "en");
+  const hasUr = words.some((w) => w.ur);
+  const lang = () => (state.lang === "ur" && hasUr ? "ur" : "en");
   const size = () => {
     const cols = 2 * g.R + 1, gap = 3, avail = Math.min(app.clientWidth - 32, 620);
     const cw = Math.max(30, Math.min(76, Math.floor((avail - gap * cols) / cols)));
@@ -127,7 +128,7 @@ export async function renderHive(app) {
       <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.s + ":" + p.a.n) ? " won" : ""}" data-p="${p.s}:${p.a.n}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span>${p.s}:${p.a.n}</span></button>`).join("")}</div>
       <div class="row" style="justify-content:center"><button class="btn" id="deal" ${busy ? "disabled" : ""}>New āyāt</button>${g.combo >= 2 ? `<span class="note">Streak ${g.combo}${g.combo >= 5 ? " · double honey" : ""}</span>` : ""}</div>
       <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
-      <section class="card quiz">${panel}</section>`;
+      <section class="card quiz">${panel}</section>${CREDIT}`;
   }
   const start = (p) => { const L = layout(p.a.w.length); Object.assign(g, { mode: "play", cur: p, R: L.R, path: L.path, res: p.a.w.map(() => null), active: null, gain: null, last: null, fresh: true }); draw(); };
   const toPick = () => { Object.assign(g, { mode: "pick", cur: null, path: [], res: [], active: null, gain: null, last: null, R: 2 }); draw(); };

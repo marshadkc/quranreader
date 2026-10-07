@@ -8,6 +8,7 @@ const app = $("#app");
 export const store = {
   get(k, d) { try { const v = localStorage.getItem("qwr." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem("qwr." + k, JSON.stringify(v)); } catch { /* ignore */ } },
+  del(k) { try { localStorage.removeItem("qwr." + k); } catch { /* ignore */ } },
 };
 
 export const state = {
@@ -36,6 +37,53 @@ export async function surah(n) {
   }
   return SURAH.get(n);
 }
+// ---------- live English word meanings ----------
+// They come from the Quran.com API. Quran Foundation's developer terms let an app show them with a credit,
+// but not keep a copy for more than 7 days, so each sūrah's copy on the device expires after a week.
+const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+export const CREDIT = `<p class="note credit">English word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>. Quran data provided by Quran Foundation.</p>`;
+const LIVE = new Map(); // sūrah -> { at, p: promise of { ayah: [meanings] } or null }
+const cleanText = (s) => String(s || "").replace(/<sup[^>]*>.*?<\/sup>|<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+function liveMeanings(n) {
+  const mem = LIVE.get(n);
+  if (mem && Date.now() - mem.at < WEEK) return mem.p;
+  const key = `en.${n}`, saved = store.get(key, null);
+  if (saved && Date.now() - saved.at < WEEK) { LIVE.set(n, { at: saved.at, p: Promise.resolve(saved.ayahs) }); return LIVE.get(n).p; }
+  if (saved) store.del(key);
+  const p = (async () => {
+    const ayahs = {};
+    for (let page = 1; page; ) {
+      const r = await fetch(`${WBW_API}${n}?words=true&language=en&per_page=50&page=${page}&fields=verse_number&word_fields=char_type_name`);
+      if (!r.ok) throw new Error(`Quran.com answered ${r.status}`);
+      const d = await r.json();
+      for (const v of d.verses) ayahs[v.verse_number] = v.words.filter((w) => w.char_type_name === "word").map((w) => cleanText(w.translation && w.translation.text));
+      page = d.pagination && d.pagination.next_page;
+    }
+    store.set(key, { at: Date.now(), ayahs });
+    return ayahs;
+  })().catch(() => { LIVE.delete(n); return null; }); // offline: try again next time
+  LIVE.set(n, { at: Date.now(), p });
+  return p;
+}
+// A sūrah with its meanings attached. Ayahs whose word count differs from ours are left without, so no meaning lands on the wrong word.
+export async function withMeanings(n) {
+  const d = await surah(n);
+  if (!d.live) {
+    const m = await liveMeanings(n);
+    if (m) {
+      for (const a of d.ayahs) {
+        const ens = m[a.n];
+        if (ens && ens.length === a.w.length) a.w.forEach((w, i) => { if (!w.en && ens[i]) w.en = ens[i]; });
+      }
+      d.live = true;
+    }
+  }
+  return d;
+}
+// Fetch every sūrah's meanings in the background, one at a time, so the app works offline for the week
+async function prefetchMeanings() { for (const n of ORDER) await liveMeanings(n); }
+
 export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // Al-Fatihah, then An-Nas back to An-Naba
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -52,7 +100,6 @@ const allWords = (d) => d.ayahs.flatMap((a) => a.w);
 // ---------- views ----------
 async function home() {
   const idx = await index();
-  const ready = idx.surahs.filter((s) => s.ready).length;
   const loaded = await Promise.all(ORDER.map(surah));
   const juz = loaded.filter((d) => d.n !== 1).flatMap(allWords);
   const pct = unaided(juz);
@@ -64,23 +111,23 @@ async function home() {
       <div class="row"><span>Juz ʿAmma read without help</span><strong>${pct}%</strong></div>
       <div class="track"><div class="fill" style="width:${pct}%"></div></div>
     </section>
-    ${ready < idx.surahs.length ? `<div class="banner">Word meanings are added for ${ready} of ${idx.surahs.length} sūrahs so far. The others already show the Arabic, each word's parts and its root.</div>` : ""}
     <ul class="list">
       ${ORDER.map((n) => {
         const s = idx.surahs.find((x) => x.n === n), d = SURAH.get(n), p = unaided(allWords(d));
         return `<li><a href="#/s/${n}"><span class="num">${n}</span>
-          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words} words${s.ready ? "" : " · meanings coming"}</small>
+          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words} words</small>
           <span class="mini"><i style="width:${p}%"></i></span></span>
           <span class="arname">${esc(s.ar)}</span></a></li>`;
       }).join("")}
     </ul>`;
+  prefetchMeanings();
 }
 
 let selected = null; // index into the reader's word list
 async function reader(n) {
-  const d = await surah(n), idx = await index(), meta = idx.surahs.find((s) => s.n === n);
-  const ws = allWords(d), pct = unaided(ws);
-  const lang = state.lang;
+  const d = await withMeanings(n), idx = await index(), meta = idx.surahs.find((s) => s.n === n);
+  const ws = allWords(d), pct = unaided(ws), ready = ws.some(hasMeaning), hasUr = ws.some((w) => w.ur);
+  const lang = hasUr ? state.lang : "en";
   let sheet = "";
   if (selected !== null && ws[selected]) {
     const w = ws[selected];
@@ -108,14 +155,14 @@ async function reader(n) {
       <div class="track"><div class="fill" style="width:${pct}%"></div></div>
     </section>
     <div class="row">
-      <div class="seg" aria-label="Meaning language">
+      ${hasUr ? `<div class="seg" aria-label="Meaning language">
         <button data-lang="both" aria-pressed="${lang === "both"}">Both</button>
         <button data-lang="en" aria-pressed="${lang === "en"}">English</button>
         <button data-lang="ur" aria-pressed="${lang === "ur"}">اردو</button>
-      </div>
-      ${meta.ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}
+      </div>` : ""}
+      ${ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}
     </div>
-    ${meta.ready ? "" : `<div class="banner">Meanings for this sūrah haven't been added yet. Tap any word to see its parts, base word and root.</div>`}
+    ${ready ? "" : `<div class="banner">Word meanings load from Quran.com and need an internet connection at least once a week. Tap any word to see its parts, base word and root.</div>`}
     ${sheet}
     <div class="verses ${lang === "en" ? "only-en" : lang === "ur" ? "only-ur" : ""}">
     ${d.ayahs.map((a) => {
@@ -131,7 +178,8 @@ async function reader(n) {
         ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
       </article>`;
     }).join("")}
-    </div>`;
+    </div>
+    ${d.live ? CREDIT : ""}`;
   app.onclick = (e) => {
     const lb = e.target.closest("[data-lang]");
     if (lb) { state.lang = lb.dataset.lang; store.set("lang", state.lang); return reader(n); }
@@ -152,9 +200,9 @@ async function reader(n) {
 // Practice: lowest level first, frequent words first
 let q = null, qDone = 0;
 async function practise(n) {
-  const d = await surah(n), ws = allWords(d).filter(hasMeaning);
-  if (!ws.length) { app.innerHTML = `<div class="banner">Meanings for this sūrah haven't been added yet, so there is nothing to practise.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
-  const lang = state.lang === "ur" ? "ur" : "en";
+  const d = await withMeanings(n), ws = allWords(d).filter(hasMeaning);
+  if (!ws.length) { app.innerHTML = `<div class="banner">This sūrah's word meanings haven't loaded, so there is nothing to practise yet. They need an internet connection at least once a week.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
+  const lang = state.lang === "ur" && ws.some((w) => w.ur) ? "ur" : "en";
   const next = () => {
     const lemmas = [...new Map(ws.map((w) => [w.l, w])).values()]
       .sort((a, b) => lv(a.l) - lv(b.l) || b.f - a.f || Math.random() - 0.5).slice(0, 4);
@@ -174,7 +222,7 @@ async function practise(n) {
         <div class="opts">${q.opts.map((o, i) => `<button class="opt${q.lang === "ur" ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
         ${q.done ? `<button class="btn primary" id="next">Next word</button>` : ""}
-      </section>`;
+      </section>${d.live ? CREDIT : ""}`;
   };
   next(); draw();
   app.onclick = (e) => {
@@ -215,8 +263,8 @@ async function parts() {
 function about() {
   app.innerHTML = `<h1>About</h1>
     <div class="card"><p>Quran Word Reader helps you understand Al-Fātiḥah and Juz ʿAmma directly in Arabic. Each word shows its meaning, which fades as you learn it.</p>
-    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Word meanings are being added from open sources and will be credited here. Your progress stays on this device.</p>
-    <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
+    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. English word meanings come live from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translation: Quran data provided by Quran Foundation. A copy is kept on this device for up to 7 days and then fetched again. Urdu word meanings will be added once an openly licensed source is found. Your progress stays on this device.</p>
+    <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit; word meanings stay available offline for 7 days after they were last fetched.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
     if (e.target.id !== "reset") return;

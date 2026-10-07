@@ -133,3 +133,5 @@ th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute
 
 @media (max-width:440px){.w{flex-basis:76px}.w .ar{font-size:24px}.opts{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.credit{margin:16px 0 0}
+.credit a{color:inherit}
