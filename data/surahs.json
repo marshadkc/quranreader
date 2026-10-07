@@ -7,7 +7,768 @@
    "meaning": "The Opening",
    "ayahs": 7,
    "words": 29,
-   "ready": false
+   "ready": false,
+   "course": true
+  },
+  {
+   "n": 2,
+   "ar": "البقرة",
+   "en": "Al-Baqarah",
+   "meaning": "The Cow",
+   "ayahs": 286,
+   "words": 6116,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 3,
+   "ar": "آل عمران",
+   "en": "Al-Imran",
+   "meaning": "The Family of Imran",
+   "ayahs": 200,
+   "words": 3481,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 4,
+   "ar": "النساء",
+   "en": "An-Nisa",
+   "meaning": "The Women",
+   "ayahs": 176,
+   "words": 3747,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 5,
+   "ar": "المائدة",
+   "en": "Al-Ma'idah",
+   "meaning": "The Table Spread",
+   "ayahs": 120,
+   "words": 2804,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 6,
+   "ar": "الأنعام",
+   "en": "Al-An'am",
+   "meaning": "The Cattle",
+   "ayahs": 165,
+   "words": 3050,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 7,
+   "ar": "الأعراف",
+   "en": "Al-A'raf",
+   "meaning": "The Heights",
+   "ayahs": 206,
+   "words": 3320,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 8,
+   "ar": "الأنفال",
+   "en": "Al-Anfal",
+   "meaning": "The Spoils of War",
+   "ayahs": 75,
+   "words": 1233,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 9,
+   "ar": "التوبة",
+   "en": "At-Tawbah",
+   "meaning": "The Repentance",
+   "ayahs": 129,
+   "words": 2498,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 10,
+   "ar": "يونس",
+   "en": "Yunus",
+   "meaning": "Jonah",
+   "ayahs": 109,
+   "words": 1833,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 11,
+   "ar": "هود",
+   "en": "Hud",
+   "meaning": "Hud",
+   "ayahs": 123,
+   "words": 1917,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 12,
+   "ar": "يوسف",
+   "en": "Yusuf",
+   "meaning": "Joseph",
+   "ayahs": 111,
+   "words": 1777,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 13,
+   "ar": "الرعد",
+   "en": "Ar-Ra'd",
+   "meaning": "The Thunder",
+   "ayahs": 43,
+   "words": 853,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 14,
+   "ar": "إبراهيم",
+   "en": "Ibrahim",
+   "meaning": "Abraham",
+   "ayahs": 52,
+   "words": 830,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 15,
+   "ar": "الحجر",
+   "en": "Al-Hijr",
+   "meaning": "The Rocky Tract",
+   "ayahs": 99,
+   "words": 655,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 16,
+   "ar": "النحل",
+   "en": "An-Nahl",
+   "meaning": "The Bee",
+   "ayahs": 128,
+   "words": 1844,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 17,
+   "ar": "الإسراء",
+   "en": "Al-Isra",
+   "meaning": "The Night Journey",
+   "ayahs": 111,
+   "words": 1556,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 18,
+   "ar": "الكهف",
+   "en": "Al-Kahf",
+   "meaning": "The Cave",
+   "ayahs": 110,
+   "words": 1579,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 19,
+   "ar": "مريم",
+   "en": "Maryam",
+   "meaning": "Mary",
+   "ayahs": 98,
+   "words": 961,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 20,
+   "ar": "طه",
+   "en": "Ta-Ha",
+   "meaning": "Ta-Ha",
+   "ayahs": 135,
+   "words": 1335,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 21,
+   "ar": "الأنبياء",
+   "en": "Al-Anbiya",
+   "meaning": "The Prophets",
+   "ayahs": 112,
+   "words": 1169,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 22,
+   "ar": "الحج",
+   "en": "Al-Hajj",
+   "meaning": "The Pilgrimage",
+   "ayahs": 78,
+   "words": 1274,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 23,
+   "ar": "المؤمنون",
+   "en": "Al-Mu'minun",
+   "meaning": "The Believers",
+   "ayahs": 118,
+   "words": 1050,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 24,
+   "ar": "النور",
+   "en": "An-Nur",
+   "meaning": "The Light",
+   "ayahs": 64,
+   "words": 1316,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 25,
+   "ar": "الفرقان",
+   "en": "Al-Furqan",
+   "meaning": "The Criterion",
+   "ayahs": 77,
+   "words": 893,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 26,
+   "ar": "الشعراء",
+   "en": "Ash-Shu'ara",
+   "meaning": "The Poets",
+   "ayahs": 227,
+   "words": 1318,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 27,
+   "ar": "النمل",
+   "en": "An-Naml",
+   "meaning": "The Ant",
+   "ayahs": 93,
+   "words": 1151,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 28,
+   "ar": "القصص",
+   "en": "Al-Qasas",
+   "meaning": "The Stories",
+   "ayahs": 88,
+   "words": 1430,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 29,
+   "ar": "العنكبوت",
+   "en": "Al-Ankabut",
+   "meaning": "The Spider",
+   "ayahs": 69,
+   "words": 976,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 30,
+   "ar": "الروم",
+   "en": "Ar-Rum",
+   "meaning": "The Romans",
+   "ayahs": 60,
+   "words": 817,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 31,
+   "ar": "لقمان",
+   "en": "Luqman",
+   "meaning": "Luqman",
+   "ayahs": 34,
+   "words": 546,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 32,
+   "ar": "السجدة",
+   "en": "As-Sajdah",
+   "meaning": "The Prostration",
+   "ayahs": 30,
+   "words": 372,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 33,
+   "ar": "الأحزاب",
+   "en": "Al-Ahzab",
+   "meaning": "The Combined Forces",
+   "ayahs": 73,
+   "words": 1287,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 34,
+   "ar": "سبأ",
+   "en": "Saba",
+   "meaning": "Sheba",
+   "ayahs": 54,
+   "words": 883,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 35,
+   "ar": "فاطر",
+   "en": "Fatir",
+   "meaning": "The Originator",
+   "ayahs": 45,
+   "words": 775,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 36,
+   "ar": "يس",
+   "en": "Ya-Sin",
+   "meaning": "Ya-Sin",
+   "ayahs": 83,
+   "words": 725,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 37,
+   "ar": "الصافات",
+   "en": "As-Saffat",
+   "meaning": "Those Ranged in Rows",
+   "ayahs": 182,
+   "words": 860,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 38,
+   "ar": "ص",
+   "en": "Sad",
+   "meaning": "Sad",
+   "ayahs": 88,
+   "words": 733,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 39,
+   "ar": "الزمر",
+   "en": "Az-Zumar",
+   "meaning": "The Groups",
+   "ayahs": 75,
+   "words": 1172,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 40,
+   "ar": "غافر",
+   "en": "Ghafir",
+   "meaning": "The Forgiver",
+   "ayahs": 85,
+   "words": 1219,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 41,
+   "ar": "فصلت",
+   "en": "Fussilat",
+   "meaning": "Explained in Detail",
+   "ayahs": 54,
+   "words": 794,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 42,
+   "ar": "الشورى",
+   "en": "Ash-Shura",
+   "meaning": "The Consultation",
+   "ayahs": 53,
+   "words": 860,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 43,
+   "ar": "الزخرف",
+   "en": "Az-Zukhruf",
+   "meaning": "The Ornaments of Gold",
+   "ayahs": 89,
+   "words": 830,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 44,
+   "ar": "الدخان",
+   "en": "Ad-Dukhan",
+   "meaning": "The Smoke",
+   "ayahs": 59,
+   "words": 346,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 45,
+   "ar": "الجاثية",
+   "en": "Al-Jathiyah",
+   "meaning": "The Kneeling",
+   "ayahs": 37,
+   "words": 488,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 46,
+   "ar": "الأحقاف",
+   "en": "Al-Ahqaf",
+   "meaning": "The Wind-Curved Sandhills",
+   "ayahs": 35,
+   "words": 643,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 47,
+   "ar": "محمد",
+   "en": "Muhammad",
+   "meaning": "Muhammad",
+   "ayahs": 38,
+   "words": 539,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 48,
+   "ar": "الفتح",
+   "en": "Al-Fath",
+   "meaning": "The Victory",
+   "ayahs": 29,
+   "words": 560,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 49,
+   "ar": "الحجرات",
+   "en": "Al-Hujurat",
+   "meaning": "The Rooms",
+   "ayahs": 18,
+   "words": 347,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 50,
+   "ar": "ق",
+   "en": "Qaf",
+   "meaning": "Qaf",
+   "ayahs": 45,
+   "words": 373,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 51,
+   "ar": "الذاريات",
+   "en": "Adh-Dhariyat",
+   "meaning": "The Winnowing Winds",
+   "ayahs": 60,
+   "words": 360,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 52,
+   "ar": "الطور",
+   "en": "At-Tur",
+   "meaning": "The Mount",
+   "ayahs": 49,
+   "words": 312,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 53,
+   "ar": "النجم",
+   "en": "An-Najm",
+   "meaning": "The Star",
+   "ayahs": 62,
+   "words": 360,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 54,
+   "ar": "القمر",
+   "en": "Al-Qamar",
+   "meaning": "The Moon",
+   "ayahs": 55,
+   "words": 342,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 55,
+   "ar": "الرحمن",
+   "en": "Ar-Rahman",
+   "meaning": "The Most Merciful",
+   "ayahs": 78,
+   "words": 351,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 56,
+   "ar": "الواقعة",
+   "en": "Al-Waqi'ah",
+   "meaning": "The Inevitable Event",
+   "ayahs": 96,
+   "words": 379,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 57,
+   "ar": "الحديد",
+   "en": "Al-Hadid",
+   "meaning": "The Iron",
+   "ayahs": 29,
+   "words": 574,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 58,
+   "ar": "المجادلة",
+   "en": "Al-Mujadila",
+   "meaning": "The Pleading Woman",
+   "ayahs": 22,
+   "words": 472,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 59,
+   "ar": "الحشر",
+   "en": "Al-Hashr",
+   "meaning": "The Exile",
+   "ayahs": 24,
+   "words": 445,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 60,
+   "ar": "الممتحنة",
+   "en": "Al-Mumtahanah",
+   "meaning": "The Woman to be Examined",
+   "ayahs": 13,
+   "words": 348,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 61,
+   "ar": "الصف",
+   "en": "As-Saff",
+   "meaning": "The Ranks",
+   "ayahs": 14,
+   "words": 221,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 62,
+   "ar": "الجمعة",
+   "en": "Al-Jumu'ah",
+   "meaning": "Friday",
+   "ayahs": 11,
+   "words": 175,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 63,
+   "ar": "المنافقون",
+   "en": "Al-Munafiqun",
+   "meaning": "The Hypocrites",
+   "ayahs": 11,
+   "words": 180,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 64,
+   "ar": "التغابن",
+   "en": "At-Taghabun",
+   "meaning": "The Mutual Loss and Gain",
+   "ayahs": 18,
+   "words": 241,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 65,
+   "ar": "الطلاق",
+   "en": "At-Talaq",
+   "meaning": "The Divorce",
+   "ayahs": 12,
+   "words": 287,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 66,
+   "ar": "التحريم",
+   "en": "At-Tahrim",
+   "meaning": "The Prohibition",
+   "ayahs": 12,
+   "words": 249,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 67,
+   "ar": "الملك",
+   "en": "Al-Mulk",
+   "meaning": "The Sovereignty",
+   "ayahs": 30,
+   "words": 333,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 68,
+   "ar": "القلم",
+   "en": "Al-Qalam",
+   "meaning": "The Pen",
+   "ayahs": 52,
+   "words": 300,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 69,
+   "ar": "الحاقة",
+   "en": "Al-Haqqah",
+   "meaning": "The Inevitable Reality",
+   "ayahs": 52,
+   "words": 258,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 70,
+   "ar": "المعارج",
+   "en": "Al-Ma'arij",
+   "meaning": "The Ascending Stairways",
+   "ayahs": 44,
+   "words": 217,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 71,
+   "ar": "نوح",
+   "en": "Nuh",
+   "meaning": "Noah",
+   "ayahs": 28,
+   "words": 226,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 72,
+   "ar": "الجن",
+   "en": "Al-Jinn",
+   "meaning": "The Jinn",
+   "ayahs": 28,
+   "words": 285,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 73,
+   "ar": "المزمل",
+   "en": "Al-Muzzammil",
+   "meaning": "The Enwrapped One",
+   "ayahs": 20,
+   "words": 199,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 74,
+   "ar": "المدثر",
+   "en": "Al-Muddaththir",
+   "meaning": "The Cloaked One",
+   "ayahs": 56,
+   "words": 255,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 75,
+   "ar": "القيامة",
+   "en": "Al-Qiyamah",
+   "meaning": "The Resurrection",
+   "ayahs": 40,
+   "words": 164,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 76,
+   "ar": "الإنسان",
+   "en": "Al-Insan",
+   "meaning": "Man",
+   "ayahs": 31,
+   "words": 243,
+   "ready": false,
+   "course": false
+  },
+  {
+   "n": 77,
+   "ar": "المرسلات",
+   "en": "Al-Mursalat",
+   "meaning": "Those Sent Forth",
+   "ayahs": 50,
+   "words": 181,
+   "ready": false,
+   "course": false
   },
   {
    "n": 78,
@@ -16,7 +777,8 @@
    "meaning": "The Great News",
    "ayahs": 40,
    "words": 173,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 79,
@@ -25,7 +787,8 @@
    "meaning": "Those Who Pull Out",
    "ayahs": 46,
    "words": 179,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 80,
@@ -34,7 +797,8 @@
    "meaning": "He Frowned",
    "ayahs": 42,
    "words": 133,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 81,
@@ -43,7 +807,8 @@
    "meaning": "The Folding Up",
    "ayahs": 29,
    "words": 104,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 82,
@@ -52,7 +817,8 @@
    "meaning": "The Splitting Open",
    "ayahs": 19,
    "words": 80,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 83,
@@ -61,7 +827,8 @@
    "meaning": "Those Who Give Short Measure",
    "ayahs": 36,
    "words": 169,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 84,
@@ -70,7 +837,8 @@
    "meaning": "The Splitting Asunder",
    "ayahs": 25,
    "words": 107,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 85,
@@ -79,7 +847,8 @@
    "meaning": "The Great Stars",
    "ayahs": 22,
    "words": 109,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 86,
@@ -88,7 +857,8 @@
    "meaning": "The Night Comer",
    "ayahs": 17,
    "words": 61,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 87,
@@ -97,7 +867,8 @@
    "meaning": "The Most High",
    "ayahs": 19,
    "words": 72,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 88,
@@ -106,7 +877,8 @@
    "meaning": "The Overwhelming Event",
    "ayahs": 26,
    "words": 92,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 89,
@@ -115,7 +887,8 @@
    "meaning": "The Dawn",
    "ayahs": 30,
    "words": 137,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 90,
@@ -124,7 +897,8 @@
    "meaning": "The City",
    "ayahs": 20,
    "words": 82,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 91,
@@ -133,7 +907,8 @@
    "meaning": "The Sun",
    "ayahs": 15,
    "words": 54,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 92,
@@ -142,7 +917,8 @@
    "meaning": "The Night",
    "ayahs": 21,
    "words": 71,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 93,
@@ -151,7 +927,8 @@
    "meaning": "The Morning Light",
    "ayahs": 11,
    "words": 40,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 94,
@@ -160,7 +937,8 @@
    "meaning": "The Opening Up",
    "ayahs": 8,
    "words": 27,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 95,
@@ -169,7 +947,8 @@
    "meaning": "The Fig",
    "ayahs": 8,
    "words": 34,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 96,
@@ -178,7 +957,8 @@
    "meaning": "The Clinging Clot",
    "ayahs": 19,
    "words": 72,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 97,
@@ -187,7 +967,8 @@
    "meaning": "The Night of Decree",
    "ayahs": 5,
    "words": 30,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 98,
@@ -196,7 +977,8 @@
    "meaning": "The Clear Proof",
    "ayahs": 8,
    "words": 94,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 99,
@@ -205,7 +987,8 @@
    "meaning": "The Earthquake",
    "ayahs": 8,
    "words": 36,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 100,
@@ -214,7 +997,8 @@
    "meaning": "The Chargers",
    "ayahs": 11,
    "words": 40,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 101,
@@ -223,7 +1007,8 @@
    "meaning": "The Striking Calamity",
    "ayahs": 11,
    "words": 36,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 102,
@@ -232,7 +1017,8 @@
    "meaning": "Competition in Increase",
    "ayahs": 8,
    "words": 28,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 103,
@@ -241,7 +1027,8 @@
    "meaning": "Time",
    "ayahs": 3,
    "words": 14,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 104,
@@ -250,7 +1037,8 @@
    "meaning": "The Slanderer",
    "ayahs": 9,
    "words": 33,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 105,
@@ -259,7 +1047,8 @@
    "meaning": "The Elephant",
    "ayahs": 5,
    "words": 23,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 106,
@@ -268,7 +1057,8 @@
    "meaning": "Quraysh",
    "ayahs": 4,
    "words": 17,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 107,
@@ -277,7 +1067,8 @@
    "meaning": "Small Kindnesses",
    "ayahs": 7,
    "words": 25,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 108,
@@ -286,7 +1077,8 @@
    "meaning": "Abundance",
    "ayahs": 3,
    "words": 10,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 109,
@@ -295,7 +1087,8 @@
    "meaning": "The Disbelievers",
    "ayahs": 6,
    "words": 26,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 110,
@@ -304,7 +1097,8 @@
    "meaning": "The Help",
    "ayahs": 3,
    "words": 19,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 111,
@@ -313,7 +1107,8 @@
    "meaning": "The Palm Fibre",
    "ayahs": 5,
    "words": 23,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 112,
@@ -322,7 +1117,8 @@
    "meaning": "Sincerity",
    "ayahs": 4,
    "words": 15,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 113,
@@ -331,7 +1127,8 @@
    "meaning": "The Daybreak",
    "ayahs": 5,
    "words": 23,
-   "ready": false
+   "ready": false,
+   "course": true
   },
   {
    "n": 114,
@@ -340,7 +1137,8 @@
    "meaning": "Mankind",
    "ayahs": 6,
    "words": 20,
-   "ready": false
+   "ready": false,
+   "course": true
   }
  ],
  "parts": {
