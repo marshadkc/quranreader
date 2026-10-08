@@ -197,13 +197,12 @@ export async function renderHive(app) {
   // The first team whose cells join its two edges wins.
   const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
   const names = () => store.get("teamNames", TEAMS.map((x) => x.name));
-  // A brick-wall board, W cells across and H rows, every other row shifted half a cell, so every route
-  // from the right edge to the left edge crosses all W columns.
-  const W = 7, H = 5;
-  const board0 = () => Array.from({ length: H * W }, (_, i) => { const row = Math.floor(i / W), col = i % W; return { k: row + "," + col, row, col, x: col + (row % 2) / 2 }; });
-  const START = [(c) => c.col === W - 1, (c) => c.col === 0], GOAL = [START[1], START[0]];
+  // A hexagon of 37 cells, seven across the middle row; each row's end cells make up the side edges.
+  const TR = 3;
+  const board0 = () => comb(TR).map((c) => ({ ...c, k: c.r + "," + c.q, row: c.r, col: c.q }));
+  const START = [(c) => c.rightEnd, (c) => c.leftEnd], GOAL = [START[1], START[0]];
   const ROUTE = ["right → left", "left → right"], EDGE = ["the right edge", "the left edge"];
-  const near = (c) => { const d = c.row % 2 ? 0 : -1; return [[0, -1], [0, 1], [-1, d], [-1, d + 1], [1, d], [1, d + 1]].map(([dr, dc]) => c.row + dr + "," + (c.col + dc)); };
+  const near = (c) => [[0, -1], [0, 1], [-1, 0], [-1, 1], [1, 0], [1, -1]].map(([dr, dc]) => c.row + dr + "," + (c.col + dc));
   function match() {
     const cells = board0();
     // one word per cell: the chosen āyāt first (each base word once), then the rest of the sūrah or juz
@@ -244,15 +243,15 @@ export async function renderHive(app) {
     if (t && t.srcKey !== srcKey) t = null;
     if (!t) t = match();
     if (!t) {
-      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs 35 different words with meanings. Choose "Whole sūrah", or a bigger sūrah or juz.</div>${CREDIT}`;
+      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs 37 different words with meanings. Choose "Whole sūrah", or a bigger sūrah or juz.</div>${CREDIT}`;
       app.onclick = (e) => { const b = e.target.closest("button"); if (b && !b.disabled) { if (b.dataset.qlang) { setQuizLang(b); return; } common(b); } };
       return;
     }
     const tdraw = () => {
-      const { cw, h, sx, sy } = size((W - 0.5) / 2), playing = t.ready && !t.over, cur = t.teams[t.turn];
+      const { cw, h, sx, sy } = size(TR), playing = t.ready && !t.over, cur = t.teams[t.turn];
       const can = playing && t.pick === null ? legal(t.turn) : new Set();
       const cells = [...t.board.values()].map((x) => {
-        const c = x.c, left = c.x * sx, top = c.row * sy;
+        const c = x.c, left = (c.x + TR) * sx, top = (c.row + TR) * sy;
         let cls, inner, tag = "div", attrs = "", fs = cw * 0.3, delay = t.fresh ? `animation-delay:${x.no * 20}ms;` : "";
         const word = `<span class="ar">${esc(x.w.t)}</span>`;
         if (t.pick === c.k) { cls = "active"; inner = `<span class="ar">${esc(t.pickW.t)}</span>`; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(t.pickW.t))); }
@@ -287,7 +286,7 @@ export async function renderHive(app) {
       app.innerHTML = `${head(playing, "Two teams build opposite ways across the honeycomb. Choose a numbered cell, answer its word, and take it, or steal one.")}
         <div class="teams">${score}</div>
         <div class="row" style="justify-content:center"><button class="btn" id="tnew">${t.over ? "Play again" : "New match"}</button></div>
-        <div class="comb" id="comb" style="--cw:${cw}px;width:${(W + 0.5) * sx - 3}px;height:${(H - 1) * sy + h}px">${cells}</div>
+        <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * TR + 1) * sx - 3}px;height:${2 * TR * sy + h}px">${cells}</div>
         <section class="card quiz">${panel}</section>${CREDIT}`;
     };
     const nextTurn = () => {
