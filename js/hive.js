@@ -28,28 +28,56 @@ function comb(R) {
   }
   return cells;
 }
-// The honeycomb grows with the āyah so a zig-zag path can always run edge to edge
-const radiusFor = (n) => Math.max(1, Math.ceil((n - 1) / 4), Math.min(3, Math.round((n - 1) / 3)));
-const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1] }; // straight left and the two left diagonals
+// The honeycomb grows with the āyah: enough cells for the path to wander, and at least as wide as the
+// shortest crossing (an āyah of n words needs n >= 2R + 1 to go edge to edge in a straight line).
+const radiusFor = (n) => { if (n < 2) return 0; let R = 1; while (3 * R * R + 3 * R + 1 < n * 1.6 && 2 * (R + 1) + 1 <= n) R++; return R; };
+// All six neighbours. The path starts on the right edge, snakes up and down the comb and ends on the
+// left edge; it may step back right on a diagonal, but never straight right.
+const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1], NE: [1, -1], SE: [0, 1] };
+const UP = new Set(["NW", "NE"]), DOWN = new Set(["SW", "SE"]);
 
 function walk(n, R) {
   const cells = comb(R), byKey = new Map(cells.map((c) => [c.k, c]));
-  const starts = cells.filter((c) => c.rightEnd).sort(() => Math.random() - 0.5);
-  let budget = 60000;
+  // steps from each cell to the left edge, for pruning paths that can no longer finish in time
+  const dist = new Map(), queue = cells.filter((c) => c.leftEnd);
+  queue.forEach((c) => dist.set(c.k, 0));
+  for (let i = 0; i < queue.length; i++) {
+    const c = queue[i];
+    for (const [dq, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]]) {
+      const x = byKey.get(c.q + dq + "," + (c.r + dr));
+      if (x && !dist.has(x.k)) { dist.set(x.k, dist.get(c.k) + 1); queue.push(x); }
+    }
+  }
+  // long āyāt like to start in a corner (top or bottom right) and swing across to the far side
+  const starts = cells.filter((c) => c.rightEnd).map((c) => ({ c, o: Math.random() - (n > 2 * R + 3 && Math.abs(c.r) === R ? 0.6 : 0) })).sort((a, b) => a.o - b.o).map((x) => x.c);
+  let budget = 80000;
   for (const s of starts) {
     const seen = new Set([s.k]), path = [s.k];
-    const pref = (m, last) => (m === "W" ? 1.6 + Math.random() : !last || last === "W" ? Math.random() : m !== last ? Math.random() * 0.7 : 0.6 + Math.random());
-    const go = (c, last) => {
+    // which way the snake is heading: down from the top half, up from the bottom half
+    let head = s.r < 0 ? "down" : s.r > 0 ? "up" : Math.random() < 0.5 ? "up" : "down";
+    const slack = () => n - path.length - (dist.get(byKey.get(path[path.length - 1]).k));
+    const pref = (m) => {
+      const v = UP.has(m) ? "up" : DOWN.has(m) ? "down" : null;
+      if (slack() <= 1) return m === "W" ? Math.random() * 0.3 : m === "NW" || m === "SW" ? 0.3 + Math.random() * 0.3 : 2 + Math.random();
+      if (v === head) return (m === "NW" || m === "SW" ? 0 : 0.2) + Math.random() * 0.6; // keep going up or down
+      if (m === "W") return 0.7 + Math.random();
+      return 1.5 + Math.random(); // against the heading
+    };
+    const go = (c) => {
       if (--budget < 0) return false;
       const rem = n - path.length;
       if (rem === 0) return c.leftEnd;
-      if (rem > 2 * (c.x + R) + 1) return false; // not enough room left for the remaining words
+      if (dist.get(c.k) > rem) return false; // too far from the left edge for the words left
+      const wall = (head === "up" && c.r === -R) || (head === "down" && c.r === R);
+      const was = head;
+      if (wall) head = head === "up" ? "down" : "up"; // reached the top or bottom: swing back
       const opts = Object.entries(STEPS).map(([m, [dq, dr]]) => ({ m, c: byKey.get(c.q + dq + "," + (c.r + dr)) }))
-        .filter((o) => o.c && !seen.has(o.c.k)).sort((a, b) => pref(a.m, last) - pref(b.m, last));
-      for (const o of opts) { seen.add(o.c.k); path.push(o.c.k); if (go(o.c, o.m)) return true; seen.delete(o.c.k); path.pop(); }
+        .filter((o) => o.c && !seen.has(o.c.k)).map((o) => ({ ...o, p: pref(o.m) })).sort((a, b) => a.p - b.p);
+      for (const o of opts) { seen.add(o.c.k); path.push(o.c.k); if (go(o.c)) return true; seen.delete(o.c.k); path.pop(); }
+      head = was;
       return false;
     };
-    if (go(s, null)) return path;
+    if (go(s)) return path;
   }
   return null;
 }
@@ -147,7 +175,7 @@ export async function renderHive(app) {
         <button data-scope="practised" aria-pressed="${scope === "practised"}" ${practised.length && !busy ? "" : "disabled"}>Āyāt I've practised${practised.length ? ` (${practised.length})` : ""}</button>
         <button data-scope="all" aria-pressed="${scope === "all"}" ${busy ? "disabled" : ""}>${src.k === "s" ? "Whole sūrah" : "Whole juz"}</button></div>${quizLangHTML(words) ? `<span class="row qlang"><span class="note">Answers in</span>${quizLangHTML(words)}</span>` : ""}</div></div>
       ${practised.length ? "" : `<p class="note">Nothing practised in ${esc(srcName)} yet. Use "Practise up to here" in the reader, and those āyāt will be collected here.</p>`}
-      <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.key) ? " won" : ""}" data-p="${esc(p.key)}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span>${esc(p.label)}</span></button>`).join("")}</div>
+      <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.key) ? " won" : ""}" data-p="${esc(p.key)}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span dir="ltr">${esc(p.label)}</span></button>`).join("")}</div>
       <div class="row" style="justify-content:center"><button class="btn" id="deal" ${busy ? "disabled" : ""}>New āyāt</button>${g.combo >= 2 ? `<span class="note">Streak ${g.combo}${g.combo >= 5 ? " · double honey" : ""}</span>` : ""}</div>
       <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
       <section class="card quiz">${panel}</section>${CREDIT}`;
