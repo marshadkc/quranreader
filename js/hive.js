@@ -35,9 +35,8 @@ const radiusFor = (n) => (n < 2 ? 0 : Math.max(1, Math.ceil((n - 1) / 4))); // a
 const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1] }; // straight left and the two left diagonals
 const VERT = { NW: "up", SW: "down" };
 
-// lo..hi limits the rows the river may use: the team race gives each team one half of the comb.
-function walk(n, R, lo = -R, hi = R, corner = false) {
-  const cells = comb(R).filter((c) => c.r >= lo && c.r <= hi), byKey = new Map(cells.map((c) => [c.k, c]));
+function walk(n, R) {
+  const cells = comb(R), byKey = new Map(cells.map((c) => [c.k, c]));
   // fewest steps from each cell to the left edge, to drop paths that can no longer finish in time
   const dist = new Map(), queue = cells.filter((c) => c.leftEnd);
   queue.forEach((c) => dist.set(c.k, 0));
@@ -49,18 +48,18 @@ function walk(n, R, lo = -R, hi = R, corner = false) {
     }
   }
   // longer āyāt like to start in the top or bottom corner and flow across to the far side
-  const starts = cells.filter((c) => c.rightEnd).map((c) => ({ c, o: Math.random() - ((corner || n > 2 * R + 3) && Math.abs(c.r) === R ? 0.6 : 0) })).sort((a, b) => a.o - b.o).map((x) => x.c);
+  const starts = cells.filter((c) => c.rightEnd).map((c) => ({ c, o: Math.random() - (n > 2 * R + 3 && Math.abs(c.r) === R ? 0.6 : 0) })).sort((a, b) => a.o - b.o).map((x) => x.c);
   let budget = 80000;
   for (const s of starts) {
     const seen = new Set([s.k]), path = [s.k];
-    let head = s.r < (lo + hi) / 2 ? "down" : s.r > (lo + hi) / 2 ? "up" : Math.random() < 0.5 ? "up" : "down";
+    let head = s.r < 0 ? "down" : s.r > 0 ? "up" : Math.random() < 0.5 ? "up" : "down";
     const go = (c, last, run) => {
       if (--budget < 0) return false;
       const rem = n - path.length;
       if (rem === 0) return c.leftEnd;
       if (dist.get(c.k) > rem || rem > 2 * (c.x + R)) return false; // can't reach the left edge in exactly rem steps
       const was = head;
-      if ((head === "up" && c.r === lo) || (head === "down" && c.r === hi) || (run >= 2 * R && Math.random() < 0.5)) head = head === "up" ? "down" : "up";
+      if ((head === "up" && c.r === -R) || (head === "down" && c.r === R) || (run >= 2 * R && Math.random() < 0.5)) head = head === "up" ? "down" : "up";
       const pref = (m) => {
         const v = VERT[m];
         if (m === last) return Math.random() * 0.5; // keep flowing the same way
@@ -79,23 +78,6 @@ function walk(n, R, lo = -R, hi = R, corner = false) {
       return false;
     };
     if (go(s, null, 0)) return path;
-  }
-  return null;
-}
-// Team race: two rivers that cross at exactly one cell. Team A's runs from the top right to the bottom
-// left; Team B's is its mirror image, from the bottom right to the top left. Every step of a river moves
-// left, so no two of its cells share a column position, and the mirror meets it only where it crosses the
-// middle row. A river that crosses the middle row once gives one shared cell, at the same word in both.
-function layout2(n) {
-  for (let R = Math.max(1, radiusFor(n)); R <= 7; R++) {
-    for (let k = 0; k < 60; k++) {
-      const a = walk(n, R, -R, R, true);
-      if (!a) break;
-      const rows = a.map((key) => +key.split(",")[1]);
-      if (rows[0] >= 0 || rows[rows.length - 1] <= 0 || rows.filter((r) => r === 0).length !== 1) continue;
-      const b = a.map((key) => { const [q, r] = key.split(",").map(Number); return q + r + "," + -r; });
-      return { R, paths: [a, b], cross: rows.indexOf(0) };
-    }
   }
   return null;
 }
@@ -206,111 +188,92 @@ export async function renderHive(app) {
   const toPick = () => { Object.assign(g, { mode: "pick", cur: null, path: [], res: [], active: null, gain: null, last: null, R: 2 }); draw(); };
 
   // ---------- team race ----------
-  // Two teams, one screen. Each team gets its own āyah with the same number of words, laid on its own
-  // river; the two rivers cross at one shared cell. Teams take turns, one word per turn.
-  // A right answer fills the cell; a wrong one turns it white and the team sits out its next turn.
-  // The first team to reach the left edge wins; if both get there in the same round, the one with more
-  // right answers wins, else it is a draw.
+  // Two teams, one screen, a numbered honeycomb with a hidden word in every cell. Teams take turns
+  // choosing a cell: a team starts on the right edge, then grows only from cells it already holds.
+  // A right answer claims the cell; a wrong one turns it white and hides a new word in it, so the cell
+  // stays free for either team and the missed word is not given away. The first team
+  // whose cells join the right edge to the left edge wins; a team in the way has to be gone around.
   const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
   const names = () => store.get("teamNames", TEAMS.map((x) => x.name));
-  const fits = (n) => n >= 3 && n !== 4; // a 4-cell river can't cross the middle row once and mirror
+  // A brick-wall board, W cells across and H rows, every other row shifted half a cell, so every route
+  // from the right edge to the left edge crosses all W columns.
+  const W = 7, H = 5;
+  const board0 = () => Array.from({ length: H * W }, (_, i) => { const row = Math.floor(i / W), col = i % W; return { k: row + "," + col, row, col, x: col + (row % 2) / 2, rightEnd: col === W - 1, leftEnd: col === 0 }; });
+  const near = (c) => { const d = c.row % 2 ? 0 : -1; return [[0, -1], [0, 1], [-1, d], [-1, d + 1], [1, d], [1, d + 1]].map(([dr, dc]) => c.row + dr + "," + (c.col + dc)); };
   function match() {
-    const ok = pool.filter((p) => p.a.w.length >= 3);
-    if (ok.length < 2) return null;
-    const byLen = new Map();
-    for (const p of ok) { const n = p.a.w.length; if (!byLen.has(n)) byLen.set(n, []); byLen.get(n).push(p); }
-    const same = [...byLen.entries()].filter(([n, l]) => fits(n) && l.length >= 2).map(([, l]) => l);
-    let pair, n;
-    if (same.length) { const l = same[Math.floor(Math.random() * same.length)]; pair = [...l].sort(() => Math.random() - 0.5).slice(0, 2); n = pair[0].a.w.length; }
-    else { // no two āyāt of the same length: play the same number of words from the start of each
-      pair = [...ok].sort(() => Math.random() - 0.5).slice(0, 2); n = Math.min(...pair.map((p) => p.a.w.length)); if (!fits(n)) n = 3;
-      pair = pair.map((p) => (p.a.w.length === n ? p : { ...p, label: `${p.label} · words 1–${n}`, a: { ...p.a, w: p.a.w.slice(0, n) } }));
+    const cells = board0();
+    // one word per cell: the chosen āyāt first (each base word once), then the rest of the sūrah or juz
+    const seen = new Set(), list = [];
+    for (const w of [...pool.flatMap((p) => p.a.w)].sort(() => Math.random() - 0.5).concat([...distract].sort(() => Math.random() - 0.5))) {
+      if (list.length === cells.length * 3) break; // the extra words refill cells after a wrong answer
+      if (!hasMeaning(w) || seen.has(w.l)) continue;
+      seen.add(w.l); list.push(w);
     }
-    const L = layout2(n);
-    if (!L) return null;
-    return { srcKey, R: L.R, n, cross: L.cross, crossBy: null, ready: false, turn: 0, active: null, opts: [], note: "", last: null, over: null, fresh: true,
-      teams: pair.map((p, i) => ({ ...TEAMS[i], name: names()[i] || TEAMS[i].name, unit: p, path: L.paths[i], res: p.a.w.map(() => null), pos: 0, turns: 0, skip: false, missed: [] })) };
+    if (list.length < cells.length) return null;
+    // numbered in rows from the top, right to left like the reading
+    const order = [...cells].sort((a, b) => a.row - b.row || b.col - a.col);
+    const board = new Map(order.map((c, i) => [c.k, { c, no: i + 1, w: list[i], own: null, white: false }]));
+    return { srcKey, board, spare: list.slice(cells.length), ready: false, turn: 0, pick: null, opts: [], last: null, over: null, fresh: true,
+      teams: TEAMS.map((x, i) => ({ ...x, name: names()[i] || x.name, right: 0, missed: [] })) };
   }
+  // cells a team may choose: free right-edge cells, and free cells touching its own
+  const legal = (ti) => new Set([...t.board.values()].filter((x) => x.own === null && (x.c.rightEnd || near(x.c).some((k) => t.board.get(k)?.own === ti))).map((x) => x.c.k));
+  const joined = (ti) => { // do the team's cells link the right edge to the left edge?
+    const mine = [...t.board.values()].filter((x) => x.own === ti), seen = new Set(), stack = mine.filter((x) => x.c.rightEnd);
+    stack.forEach((x) => seen.add(x.c.k));
+    while (stack.length) { const x = stack.pop(); if (x.c.leftEnd) return true; for (const k of near(x.c)) { const y = t.board.get(k); if (y && y.own === ti && !seen.has(k)) { seen.add(k); stack.push(y); } } }
+    return false;
+  };
   function teams() {
     if (t && t.srcKey !== srcKey) t = null;
     if (!t) t = match();
     if (!t) {
-      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs at least two āyāt of three words or more. Choose "Whole sūrah" or a bigger sūrah or juz.</div>${CREDIT}`;
+      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs 35 different words with meanings. Choose "Whole sūrah", or a bigger sūrah or juz.</div>${CREDIT}`;
       app.onclick = (e) => { const b = e.target.closest("button"); if (b && !b.disabled) { if (b.dataset.qlang) { setQuizLang(b); return; } common(b); } };
       return;
     }
     const tdraw = () => {
-      const { cw, h, sx, sy } = size(t.R), R = t.R, at = new Map();
-      t.teams.forEach((tm, ti) => tm.path.forEach((k, i) => { if (!at.has(k)) at.set(k, []); at.get(k).push([ti, i]); }));
-      const playing = !t.over && t.ready, cur = t.teams[t.turn];
-      // each river's first cell carries its team's initial (A and B if the names start alike)
-      const ini = t.teams.map((tm) => tm.name.trim().slice(0, 1).toUpperCase()), tags = ini[0] && ini[0] !== ini[1] ? ini : ["A", "B"];
-      const FILL = { wona: "var(--honey)", wonb: "#8ea8f0", white: "#fff", patha: "#f6dfae", pathb: "var(--part-soft)" };
-      const look = (ti, i) => { const tm = t.teams[ti], res = tm.res[i]; return res === "right" ? "won" + tm.cls : res === "wrong" ? "white" : "path" + tm.cls; };
-      const cells = comb(R).map((c) => {
-        const left = (c.x + R) * sx, top = (c.r + R) * sy;
-        let cls = "", inner = "", fs = cw * 0.3, tag = "div", attrs = "", delay = "", style = "";
-        if (at.has(c.k)) {
-          const own = at.get(c.k), mine = own.find(([ti, i]) => playing && ti === t.turn && i === cur.pos);
-          // the shared cell shows whoever is on it now, else whoever answered it last
-          const [ti, i] = mine || own.find(([x]) => x === t.crossBy) || own[0], tm = t.teams[ti], res = tm.res[i], tx = tm.unit.a.w[i].t;
-          fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(tx)));
-          const word = `<span class="ar">${esc(tx)}</span>`;
-          if (mine && t.active !== null) { cls = "active"; inner = word; }
-          else if (mine) { cls = look(ti, i) + " next"; tag = "button"; attrs = `data-tcell="1" aria-label="${esc(tm.name)}: reveal word ${i + 1} of ${t.n}"`; }
-          else { cls = look(ti, i); if (res) inner = word; }
-          if (own.length > 1) { cls += " cross"; style = `--ca:${FILL[look(0, t.cross)]};--cb:${FILL[look(1, t.cross)]};`; }
-          if (i === 0 && !res && !(mine && t.active !== null)) inner = `<span class="tag">${esc(tags[ti])}</span>`;
-          if (t.fresh) { cls += " appear"; delay = `animation-delay:${i * 60}ms;`; }
-        }
-        return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${style}${delay}"><span>${inner}</span></${tag}>`;
+      const { cw, h, sx, sy } = size((W - 0.5) / 2), playing = t.ready && !t.over, cur = t.teams[t.turn];
+      const can = playing && t.pick === null ? legal(t.turn) : new Set();
+      const cells = [...t.board.values()].map((x) => {
+        const c = x.c, left = c.x * sx, top = c.row * sy;
+        let cls, inner, tag = "div", attrs = "", fs = cw * 0.3, delay = t.fresh ? `animation-delay:${x.no * 20}ms;` : "";
+        const word = `<span class="ar">${esc(x.w.t)}</span>`;
+        if (x.own === 0 || x.own === 1) { cls = "won" + t.teams[x.own].cls; inner = word; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(x.w.t))); }
+        else if (t.pick === c.k) { cls = "active"; inner = word; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(x.w.t))); }
+        else { cls = "num" + (x.white ? " white" : "") + (can.has(c.k) ? " can can" + cur.cls : ""); inner = `<span class="no">${x.no}</span>`; if (can.has(c.k)) { tag = "button"; attrs = `data-tc="${c.k}" aria-label="Cell ${x.no}"`; } }
+        if (t.fresh) cls += " appear";
+        return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
       }).join("");
       t.fresh = false;
-      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)}</strong> <span dir="ltr">${esc(tm.unit.name)} ${esc(tm.unit.label)}</span>
-          <span class="note">${tm.res.filter((x) => x === "right").length} right · ${tm.pos} of ${t.n} cells${tm.skip ? " · sits out next turn" : ""}</span></div>`).join("");
-      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span>` : `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}.${t.last.who ? ` ${esc(t.last.who)} sits out the next turn.` : ""}`}</div>` : "";
+      const held = (ti) => [...t.board.values()].filter((x) => x.own === ti).length;
+      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)}</strong>
+          <span class="note">${held(ti)} cell${held(ti) === 1 ? "" : "s"} · ${tm.missed.length} wrong</span></div>`).join("");
+      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span> ${esc(t.last.who)} takes cell ${t.last.no}.` : `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}. Cell ${t.last.no} turns white and gets a new word.`}</div>` : "";
       let panel;
       if (!t.ready) {
         panel = `<div><strong>Name the teams</strong></div><div class="names">${t.teams.map((tm, i) => `<label class="team t${tm.cls}">Team ${i + 1}<input id="tn${i}" maxlength="20" value="${esc(tm.name)}" autocomplete="off"></label>`).join("")}</div>
-          <div class="note">Each team gets its own āyah of ${t.n} words. The two paths cross at one cell in the middle.</div><button class="btn primary" id="tgo">Start the match</button>`;
+          <div class="note">Each cell hides a word. Take turns choosing a numbered cell, starting on the right edge and growing from your own cells. Answer right to take the cell; a wrong answer turns it white with a new hidden word. First to join the right edge to the left edge wins.</div>
+          <button class="btn primary" id="tgo">Start the match</button>`;
       } else if (t.over) {
         const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
         panel = `${last}<h2 style="margin:4px 0">${t.over}</h2>${missed}<button class="btn honey" id="tnew">New match</button>`;
-      } else if (t.active === null) {
-        panel = `${last}${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}<div>Turn: <strong>${esc(cur.name)}</strong> · word ${cur.pos + 1} of ${t.n}</div><div class="note">Tap the glowing cell to reveal the word.</div>`;
+      } else if (t.pick === null) {
+        panel = `${last}<div>Turn: <strong>${esc(cur.name)}</strong></div><div class="note">Choose one of the glowing numbered cells${[...t.board.values()].some((x) => x.own === t.turn) ? ", on the right edge or touching your cells" : " on the right edge"}.</div>`;
       } else {
-        const w = cur.unit.a.w[cur.pos], ur = lang() === "ur";
-        panel = `<div class="note">${esc(cur.name)} · word ${cur.pos + 1} of ${t.n}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
+        const x = t.board.get(t.pick), ur = lang() === "ur";
+        panel = `<div class="note">${esc(cur.name)} · cell ${x.no}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(x.w.t)}</div><div>What does it mean?</div>
           <div class="opts">${t.opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}" data-to="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
       }
-      const busy = !t.over && t.ready;
-      app.innerHTML = `${head(busy, "Two teams race across the honeycomb, one word per turn. A wrong answer turns the cell white and costs the next turn.")}
+      app.innerHTML = `${head(playing, "Two teams race from the right edge to the left. Choose a numbered cell, answer its word, and take it.")}
         <div class="teams">${score}</div>
         <div class="row" style="justify-content:center"><button class="btn" id="tnew">${t.over ? "Play again" : "New match"}</button></div>
-        <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
+        <div class="comb" id="comb" style="--cw:${cw}px;width:${(W + 0.5) * sx - 3}px;height:${(H - 1) * sy + h}px">${cells}</div>
         <section class="card quiz">${panel}</section>${CREDIT}`;
     };
-    // after a team's turn: hand over, letting a team that missed sit out once; end when someone is through
-    const finished = () => {
-      const [a, b] = t.teams, done = t.teams.filter((tm) => tm.pos === t.n);
-      if (!done.length || a.turns !== b.turns) return false;
-      // both through in the same round: more right answers wins
-      const right = (tm) => tm.res.filter((x) => x === "right").length;
-      const win = done.length === 1 ? done[0] : right(a) === right(b) ? null : right(a) > right(b) ? a : b;
-      t.over = win ? `Winner: ${esc(win.name)}${done.length === 2 ? " (both finished; more right answers)" : ""}` : "It's a draw!";
-      return true;
-    };
-    const advance = () => {
-      t.teams[t.turn].turns++; t.note = "";
-      if (finished()) return;
-      const next = 1 - t.turn, [a, b] = t.teams;
-      if (a.skip && b.skip) { a.skip = b.skip = false; t.note = "Both teams owe a turn, so they cancel out."; }
-      else if (t.teams[next].skip) { // the other team sits out: this team goes again
-        const tm = t.teams[next]; tm.skip = false; tm.turns++; t.note = `${tm.name} sits out this turn.`;
-        if (finished()) return;
-        return;
-      }
-      t.turn = next;
+    const nextTurn = () => {
+      for (const ti of [1 - t.turn, t.turn]) if (legal(ti).size) { t.turn = ti; return; }
+      t.over = "No cells left to take. It's a draw!"; // nobody can move any more
     };
     app.onclick = (e) => {
       const b = e.target.closest("button"); if (!b || b.disabled) return;
@@ -322,19 +285,18 @@ export async function renderHive(app) {
         store.set("teamNames", ns); t.teams.forEach((tm, i) => { tm.name = ns[i]; }); t.ready = true;
         return tdraw();
       }
-      if (b.dataset.tcell && t.active === null && !t.over) {
-        const cur = t.teams[t.turn], w = cur.unit.a.w[cur.pos];
-        t.active = cur.pos; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null;
+      if (b.dataset.tc && t.pick === null && !t.over) {
+        const w = t.board.get(b.dataset.tc).w;
+        t.pick = b.dataset.tc; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null;
         return tdraw();
       }
-      if (b.dataset.to !== undefined && t.active !== null) {
-        const cur = t.teams[t.turn], w = cur.unit.a.w[cur.pos], ok = t.opts[+b.dataset.to] === w;
-        if (cur.pos === t.cross) t.crossBy = t.turn;
-        cur.res[cur.pos] = ok ? "right" : "wrong"; cur.pos++; t.active = null;
-        if (!ok) { cur.missed.push(w); cur.skip = cur.pos < t.n; }
-        t.last = { ok, w, who: cur.name };
-        if (!ok && !cur.skip) t.last.who = ""; // last cell: nothing to sit out
-        advance();
+      if (b.dataset.to !== undefined && t.pick !== null) {
+        const cur = t.teams[t.turn], x = t.board.get(t.pick), ok = t.opts[+b.dataset.to] === x.w;
+        t.pick = null; t.last = { ok, w: x.w, no: x.no, who: cur.name };
+        if (ok) { x.own = t.turn; cur.right++; }
+        else { cur.missed.push(x.w); x.white = true; x.w = t.spare.pop() || distract[Math.floor(Math.random() * distract.length)]; }
+        if (ok && joined(t.turn)) t.over = `Winner: ${esc(cur.name)}`;
+        else nextTurn();
         return tdraw();
       }
     };
