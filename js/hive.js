@@ -1,7 +1,7 @@
 // Ayah Honeycomb: the Juz Amma review game.
 // An āyah's words lie on a zig-zag path of cells from the right edge of a hexagon-shaped
 // honeycomb to the left edge. Cells are answered in reading order; right = honey, wrong = red.
-import { store, withMeanings, index, CREDIT, esc, hasMeaning, meaningOf, addHoney, quizLang, quizLangHTML, setQuizLang, distractors } from "./app.js";
+import { store, withMeanings, index, CREDIT, esc, hasMeaning, meaningOf, addHoney, quizLang, quizLangHTML, setQuizLang, distractors, bothHTML } from "./app.js";
 
 // First pick a sūrah or a juz, then play the āyāt you have practised in it ("Practise up to here"
 // remembers how far, per sūrah) or all of it.
@@ -28,17 +28,17 @@ function comb(R) {
   }
   return cells;
 }
-// The honeycomb grows with the āyah: enough cells for the path to wander, and at least as wide as the
-// shortest crossing (an āyah of n words needs n >= 2R + 1 to go edge to edge in a straight line).
-const radiusFor = (n) => { if (n < 2) return 0; let R = 1; while (3 * R * R + 3 * R + 1 < n * 1.6 && 2 * (R + 1) + 1 <= n) R++; return R; };
-// All six neighbours. The path starts on the right edge, snakes up and down the comb and ends on the
-// left edge; it may step back right on a diagonal, but never straight right.
+// The path flows like a river: from the right edge to the left edge in smooth diagonal runs that swing
+// between the top and bottom of the comb. It never drops straight down or up (two diagonals that cancel
+// sideways), and only bends back to the right now and then when a long āyah needs the room.
+const radiusFor = (n) => (n < 2 ? 0 : Math.max(1, Math.ceil((n - 1) / 5)));
 const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1], NE: [1, -1], SE: [0, 1] };
-const UP = new Set(["NW", "NE"]), DOWN = new Set(["SW", "SE"]);
+const VERT = { NW: "up", NE: "up", SW: "down", SE: "down" }, BACK = new Set(["NE", "SE"]);
+const STRAIGHT = new Set(["NW,NE", "NE,NW", "SW,SE", "SE,SW", "NE,SE", "SE,NE"]); // waterfalls and sharp hooks
 
 function walk(n, R) {
   const cells = comb(R), byKey = new Map(cells.map((c) => [c.k, c]));
-  // steps from each cell to the left edge, for pruning paths that can no longer finish in time
+  // fewest steps from each cell to the left edge, to drop paths that can no longer finish in time
   const dist = new Map(), queue = cells.filter((c) => c.leftEnd);
   queue.forEach((c) => dist.set(c.k, 0));
   for (let i = 0; i < queue.length; i++) {
@@ -48,36 +48,40 @@ function walk(n, R) {
       if (x && !dist.has(x.k)) { dist.set(x.k, dist.get(c.k) + 1); queue.push(x); }
     }
   }
-  // long āyāt like to start in a corner (top or bottom right) and swing across to the far side
+  // longer āyāt like to start in the top or bottom corner and flow across to the far side
   const starts = cells.filter((c) => c.rightEnd).map((c) => ({ c, o: Math.random() - (n > 2 * R + 3 && Math.abs(c.r) === R ? 0.6 : 0) })).sort((a, b) => a.o - b.o).map((x) => x.c);
   let budget = 80000;
   for (const s of starts) {
     const seen = new Set([s.k]), path = [s.k];
-    // which way the snake is heading: down from the top half, up from the bottom half
     let head = s.r < 0 ? "down" : s.r > 0 ? "up" : Math.random() < 0.5 ? "up" : "down";
-    const slack = () => n - path.length - (dist.get(byKey.get(path[path.length - 1]).k));
-    const pref = (m) => {
-      const v = UP.has(m) ? "up" : DOWN.has(m) ? "down" : null;
-      if (slack() <= 1) return m === "W" ? Math.random() * 0.3 : m === "NW" || m === "SW" ? 0.3 + Math.random() * 0.3 : 2 + Math.random();
-      if (v === head) return (m === "NW" || m === "SW" ? 0 : 0.2) + Math.random() * 0.6; // keep going up or down
-      if (m === "W") return 0.7 + Math.random();
-      return 1.5 + Math.random(); // against the heading
-    };
-    const go = (c) => {
+    const go = (c, last, run) => {
       if (--budget < 0) return false;
       const rem = n - path.length;
       if (rem === 0) return c.leftEnd;
-      if (dist.get(c.k) > rem) return false; // too far from the left edge for the words left
-      const wall = (head === "up" && c.r === -R) || (head === "down" && c.r === R);
+      if (dist.get(c.k) > rem) return false;
+      // room to spare: cells left over if the river ran straight to the left edge from here
+      const spare = rem - Math.ceil((c.x + R) * 2);
       const was = head;
-      if (wall) head = head === "up" ? "down" : "up"; // reached the top or bottom: swing back
+      if ((head === "up" && c.r === -R) || (head === "down" && c.r === R) || (run >= 2 * R && Math.random() < 0.5)) head = head === "up" ? "down" : "up";
+      const pref = (m) => {
+        if (BACK.has(m)) return spare > 0 ? 2 + Math.random() : 9; // a bend back right: only when needed
+        const v = VERT[m];
+        if (m === last) return Math.random() * 0.5; // keep flowing the same way
+        if (v === head) return 0.3 + Math.random() * 0.5;
+        if (m === "W") return 0.6 + Math.random() * 0.6;
+        return 1.4 + Math.random();
+      };
       const opts = Object.entries(STEPS).map(([m, [dq, dr]]) => ({ m, c: byKey.get(c.q + dq + "," + (c.r + dr)) }))
-        .filter((o) => o.c && !seen.has(o.c.k)).map((o) => ({ ...o, p: pref(o.m) })).sort((a, b) => a.p - b.p);
-      for (const o of opts) { seen.add(o.c.k); path.push(o.c.k); if (go(o.c)) return true; seen.delete(o.c.k); path.pop(); }
+        .filter((o) => o.c && !seen.has(o.c.k) && !STRAIGHT.has(last + "," + o.m)).map((o) => ({ ...o, p: pref(o.m) })).sort((a, b) => a.p - b.p);
+      for (const o of opts) {
+        seen.add(o.c.k); path.push(o.c.k);
+        if (go(o.c, o.m, o.m === last ? run + 1 : 1)) return true;
+        seen.delete(o.c.k); path.pop();
+      }
       head = was;
       return false;
     };
-    if (go(s)) return path;
+    if (go(s, null, 0)) return path;
   }
   return null;
 }
@@ -155,7 +159,7 @@ export async function renderHive(app) {
     const busy = g.mode === "play";
     let panel;
     const gain = g.gain ? `<div class="pts">${g.gain}</div>` : "";
-    const last = g.last ? `<div class="note"><span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(g.last.t)}</span> means <strong${lang() === "ur" ? ' class="ur"' : ""}>${esc(meaningOf(g.last, lang()))}</strong>.</div>` : "";
+    const last = g.last ? `<div class="note"><span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(g.last.t)}</span> means ${bothHTML(g.last)}.</div>` : "";
     if (g.mode === "pick") panel = `<div>Choose an āyah above. Its cells light up from the right edge of the honeycomb.</div>
       <div class="note">10 honey for each right answer, doubled after five in a row. Finish an āyah for 20 more, or 50 if every word was right.</div>`;
     else if (busy && g.active === null) panel = `${gain}${last}<div>${esc(cur.name)} ${cur.label} · ${g.res.filter((x) => !x).length} of ${ws.length} cells left</div>

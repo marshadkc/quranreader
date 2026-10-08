@@ -161,6 +161,8 @@ export const quizLang = (ws) => (anyUrdu(ws) ? store.get("quizLang", state.lang 
 export const quizLangHTML = (ws) => !anyUrdu(ws) ? "" : `<div class="seg" aria-label="Answers in">
   <button data-qlang="en" aria-pressed="${quizLang(ws) === "en"}">English</button>
   <button data-qlang="ur" aria-pressed="${quizLang(ws) === "ur"}">اردو</button></div>`;
+// After a wrong answer, the meaning is shown in both languages so the pair is learnt together.
+export const bothHTML = (w) => [w.en && `<strong>${esc(w.en)}</strong>`, w.ur && `<strong class="ur">${esc(w.ur)}</strong>`].filter(Boolean).join(" · ");
 export const setQuizLang = (b) => { store.set("quizLang", b.dataset.qlang); document.querySelectorAll("[data-qlang]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.qlang === b.dataset.qlang)); };
 // Wrong answers: other words whose meaning differs from the right one, and from each other, in both
 // languages, so the options stay distinct whichever language they are shown in.
@@ -554,7 +556,7 @@ async function practise(n, range) {
         <h2>${quit ? "Round stopped" : "Round complete"}</h2>
         <div class="big-score">${r.right} of ${asked}</div>
         <div class="note">right on the first try · āyāt ${opt.from}–${opt.to}${r.honey ? ` · <span class="pts">+${r.honey} honey</span>` : ""}</div>
-        ${missed.length ? `<div class="missed"><div class="row"><span class="note">Words to look at again</span>${quizLangHTML(all)}</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span class="${lang() === "ur" ? "ur" : ""}">${esc(meaningOf(w, lang()))}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
+        ${missed.length ? `<div class="missed"><div class="note">Words to look at again</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
         <div class="btns"><button class="btn primary" id="again">Practise again</button>${opt.from > 1 ? `<a class="btn" href="#/s/${n}/practise/1-${opt.to}" id="widen">Review āyāt 1–${opt.to}</a>` : ""}<button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
       </section>`;
   };
@@ -580,8 +582,8 @@ async function practise(n, range) {
     } else {
       marks[i] = "wrong"; state.combo = 0; setLevel(w.l, lv(w.l) - 1);
       if (first) { r.missed.push(w); r.answered++; }
-      if (!r.retried.has(w.l)) { r.retried.add(w.l); r.deck.push(w); fb = "Not quite. The right meaning is marked, and this word comes back once at the end."; }
-      else fb = "Not quite. The right meaning is marked.";
+      if (!r.retried.has(w.l)) { r.retried.add(w.l); r.deck.push(w); fb = `Not quite. It means ${bothHTML(w)}. This word comes back once at the end.`; }
+      else fb = `Not quite. It means ${bothHTML(w)}.`;
     }
     r.q.fb = fb; draw();
   };
