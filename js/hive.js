@@ -35,8 +35,9 @@ const radiusFor = (n) => (n < 2 ? 0 : Math.max(1, Math.ceil((n - 1) / 4))); // a
 const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1] }; // straight left and the two left diagonals
 const VERT = { NW: "up", SW: "down" };
 
-function walk(n, R) {
-  const cells = comb(R), byKey = new Map(cells.map((c) => [c.k, c]));
+// lo..hi limits the rows the river may use: the team race gives each team one half of the comb.
+function walk(n, R, lo = -R, hi = R, corner = false) {
+  const cells = comb(R).filter((c) => c.r >= lo && c.r <= hi), byKey = new Map(cells.map((c) => [c.k, c]));
   // fewest steps from each cell to the left edge, to drop paths that can no longer finish in time
   const dist = new Map(), queue = cells.filter((c) => c.leftEnd);
   queue.forEach((c) => dist.set(c.k, 0));
@@ -48,18 +49,18 @@ function walk(n, R) {
     }
   }
   // longer āyāt like to start in the top or bottom corner and flow across to the far side
-  const starts = cells.filter((c) => c.rightEnd).map((c) => ({ c, o: Math.random() - (n > 2 * R + 3 && Math.abs(c.r) === R ? 0.6 : 0) })).sort((a, b) => a.o - b.o).map((x) => x.c);
+  const starts = cells.filter((c) => c.rightEnd).map((c) => ({ c, o: Math.random() - ((corner || n > 2 * R + 3) && Math.abs(c.r) === R ? 0.6 : 0) })).sort((a, b) => a.o - b.o).map((x) => x.c);
   let budget = 80000;
   for (const s of starts) {
     const seen = new Set([s.k]), path = [s.k];
-    let head = s.r < 0 ? "down" : s.r > 0 ? "up" : Math.random() < 0.5 ? "up" : "down";
+    let head = s.r < (lo + hi) / 2 ? "down" : s.r > (lo + hi) / 2 ? "up" : Math.random() < 0.5 ? "up" : "down";
     const go = (c, last, run) => {
       if (--budget < 0) return false;
       const rem = n - path.length;
       if (rem === 0) return c.leftEnd;
       if (dist.get(c.k) > rem || rem > 2 * (c.x + R)) return false; // can't reach the left edge in exactly rem steps
       const was = head;
-      if ((head === "up" && c.r === -R) || (head === "down" && c.r === R) || (run >= 2 * R && Math.random() < 0.5)) head = head === "up" ? "down" : "up";
+      if ((head === "up" && c.r === lo) || (head === "down" && c.r === hi) || (run >= 2 * R && Math.random() < 0.5)) head = head === "up" ? "down" : "up";
       const pref = (m) => {
         const v = VERT[m];
         if (m === last) return Math.random() * 0.5; // keep flowing the same way
@@ -81,6 +82,15 @@ function walk(n, R) {
   }
   return null;
 }
+// Team race: two rivers of n cells, one in the top half dipping towards the middle and one in the bottom
+// half rising towards it. They come close in the middle but never share a cell.
+function layout2(n) {
+  for (let R = Math.max(2, radiusFor(n)); R <= 7; R++) {
+    const a = walk(n, R, -R, -1, true), b = a && walk(n, R, 1, R, true);
+    if (b) return { R, paths: [a, b] };
+  }
+  return null;
+}
 function layout(n) {
   for (let R = radiusFor(n); R <= 7; R++) { const p = walk(n, R); if (p) return { R, path: p }; }
   return { R: radiusFor(n), path: [] };
@@ -88,7 +98,7 @@ function layout(n) {
 
 // ---------- game ----------
 const letters = (t) => t.replace(/[ً-ٰٟۖ-ۭ]/g, "").length;
-let g = null;
+let g = null, t = null; // the solo game and the team race
 
 export async function renderHive(app) {
   const idx = await index();
@@ -110,7 +120,7 @@ export async function renderHive(app) {
       ${src.k === "s"
         ? `<select id="hsrc" aria-label="Sūrah">${idx.surahs.map((s) => `<option value="${s.n}" ${src.n === s.n ? "selected" : ""}>${esc(name(s.n))}</option>`).join("")}</select>`
         : `<div class="juzgrid" role="group" aria-label="Juz">${JUZ.map(([s, a], i) => `<button data-juz="${i + 1}" aria-pressed="${src.n === i + 1}" title="Juz ${i + 1} starts at ${esc(idx.surahs[s - 1].en)} ${s}:${a}">${i + 1}</button>`).join("")}</div>`}</div>`;
-  const pickSrc = (k, n) => { store.set("hiveSrc", { k, n }); store.set("hiveScope", "practised"); g = null; return renderHive(app); };
+  const pickSrc = (k, n) => { store.set("hiveSrc", { k, n }); store.set("hiveScope", "practised"); g = null; t = null; return renderHive(app); };
   app.onchange = (e) => { if (e.target.id === "hsrc") pickSrc("s", +e.target.value); };
   if (!every.length) {
     app.innerHTML = `<h1>Ayah Honeycomb</h1>${choose}<div class="banner">${esc(srcName)} has no word meanings loaded yet.</div>`;
@@ -123,14 +133,23 @@ export async function renderHive(app) {
   if (!g.nums.length) deal();
 
   const lang = () => quizLang(words);
-  const size = () => {
-    const cols = 2 * g.R + 1, gap = 3, avail = Math.min(app.clientWidth - 32, 620);
+  const mode = store.get("hiveMode", "solo");
+  const size = (R = g.R) => {
+    const cols = 2 * R + 1, gap = 3, avail = Math.min(app.clientWidth - 32, 620);
     const cw = Math.max(30, Math.min(76, Math.floor((avail - gap * cols) / cols)));
     return { cw, h: cw * 1.1547, sx: cw + gap, sy: cw * 1.1547 * 0.75 + gap * 0.87 };
   };
   // options are words, not text, so switching the answer language keeps the same question
   const opts = (w) => { g.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); };
   const honey = (p, msg) => { addHoney(p); g.gain = `+${p} honey${msg ? " · " + msg : ""}`; };
+
+  // title, game type, where the āyāt come from, and the answer language: shared by both games
+  const head = (busy, sub) => `<h1>Ayah Honeycomb</h1>
+      <div class="row"><p class="sub" style="margin:0">${sub}</p><div class="seg" aria-label="Game"><button data-mode="solo" aria-pressed="${mode === "solo"}" ${busy ? "disabled" : ""}>Solo</button><button data-mode="teams" aria-pressed="${mode === "teams"}" ${busy ? "disabled" : ""}>Two teams</button></div></div>
+      <div class="hsrc">${busy ? `<span class="note">${esc(srcName)}</span>` : choose}<div class="row"><div class="seg" aria-label="Which āyāt">
+        <button data-scope="practised" aria-pressed="${scope === "practised"}" ${practised.length && !busy ? "" : "disabled"}>Āyāt I've practised${practised.length ? ` (${practised.length})` : ""}</button>
+        <button data-scope="all" aria-pressed="${scope === "all"}" ${busy ? "disabled" : ""}>${src.k === "s" ? "Whole sūrah" : "Whole juz"}</button></div>${quizLangHTML(words) ? `<span class="row qlang"><span class="note">Answers in</span>${quizLangHTML(words)}</span>` : ""}</div></div>
+      ${practised.length ? "" : `<p class="note">Nothing practised in ${esc(srcName)} yet. Use "Practise up to here" in the reader, and those āyāt will be collected here.</p>`}`;
 
   function draw() {
     const cur = g.cur, ws = cur ? cur.a.w : [];
@@ -169,12 +188,7 @@ export async function renderHive(app) {
       panel = `${gain}${last}<div><strong style="color:var(--good)">${esc(cur.name)} ${cur.label} complete.</strong> ${right} of ${ws.length} words right.</div>
         ${cur.a.en || cur.a.ur ? `<div>${esc(cur.a.en || "")}</div><div class="ur">${esc(cur.a.ur || "")}</div>` : ""}<button class="btn honey" id="back">Next āyah</button>`;
     }
-    app.innerHTML = `<h1>Ayah Honeycomb</h1>
-      <p class="sub">Choose an āyah. Tap the glowing cell to see its word, then pick the meaning. Right answers fill with honey; wrong ones turn red.</p>
-      <div class="hsrc">${busy ? `<span class="note">${esc(srcName)}</span>` : choose}<div class="row"><div class="seg" aria-label="Which āyāt">
-        <button data-scope="practised" aria-pressed="${scope === "practised"}" ${practised.length && !busy ? "" : "disabled"}>Āyāt I've practised${practised.length ? ` (${practised.length})` : ""}</button>
-        <button data-scope="all" aria-pressed="${scope === "all"}" ${busy ? "disabled" : ""}>${src.k === "s" ? "Whole sūrah" : "Whole juz"}</button></div>${quizLangHTML(words) ? `<span class="row qlang"><span class="note">Answers in</span>${quizLangHTML(words)}</span>` : ""}</div></div>
-      ${practised.length ? "" : `<p class="note">Nothing practised in ${esc(srcName)} yet. Use "Practise up to here" in the reader, and those āyāt will be collected here.</p>`}
+    app.innerHTML = `${head(busy, "Choose an āyah. Tap the glowing cell to see its word, then pick the meaning. Right answers fill with honey; wrong ones turn red.")}
       <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.key) ? " won" : ""}" data-p="${esc(p.key)}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span dir="ltr">${esc(p.label)}</span></button>`).join("")}</div>
       <div class="row" style="justify-content:center"><button class="btn" id="deal" ${busy ? "disabled" : ""}>New āyāt</button>${g.combo >= 2 ? `<span class="note">Streak ${g.combo}${g.combo >= 5 ? " · double honey" : ""}</span>` : ""}</div>
       <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
@@ -183,17 +197,145 @@ export async function renderHive(app) {
   const start = (p) => { const L = layout(p.a.w.length); Object.assign(g, { mode: "play", cur: p, R: L.R, path: L.path, res: p.a.w.map(() => null), active: null, gain: null, last: null, fresh: true }); draw(); };
   const toPick = () => { Object.assign(g, { mode: "pick", cur: null, path: [], res: [], active: null, gain: null, last: null, R: 2 }); draw(); };
 
+  // ---------- team race ----------
+  // Two teams, one screen. Each team gets its own āyah with the same number of words, laid on its own
+  // river: Team A in the top half, Team B in the bottom half. Teams take turns, one word per turn.
+  // A right answer fills the cell; a wrong one turns it white and the team sits out its next turn.
+  // The first team to reach the left edge wins; if both get there in the same round, the one with more
+  // right answers wins, else it is a draw.
+  const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
+  function match() {
+    const ok = pool.filter((p) => p.a.w.length >= 3);
+    if (ok.length < 2) return null;
+    const byLen = new Map();
+    for (const p of ok) { const n = p.a.w.length; if (!byLen.has(n)) byLen.set(n, []); byLen.get(n).push(p); }
+    const same = [...byLen.values()].filter((l) => l.length >= 2);
+    let pair, n;
+    if (same.length) { const l = same[Math.floor(Math.random() * same.length)]; pair = [...l].sort(() => Math.random() - 0.5).slice(0, 2); n = pair[0].a.w.length; }
+    else { // no two āyāt of the same length: play the same number of words from the start of each
+      pair = [...ok].sort(() => Math.random() - 0.5).slice(0, 2); n = Math.min(...pair.map((p) => p.a.w.length));
+      pair = pair.map((p) => (p.a.w.length === n ? p : { ...p, label: `${p.label} · words 1–${n}`, a: { ...p.a, w: p.a.w.slice(0, n) } }));
+    }
+    const L = layout2(n);
+    if (!L) return null;
+    return { srcKey, R: L.R, n, turn: 0, active: null, opts: [], note: "", last: null, over: null, fresh: true,
+      teams: pair.map((p, i) => ({ ...TEAMS[i], unit: p, path: L.paths[i], res: p.a.w.map(() => null), pos: 0, turns: 0, skip: false, missed: [] })) };
+  }
+  function teams() {
+    if (t && t.srcKey !== srcKey) t = null;
+    if (!t) t = match();
+    if (!t) {
+      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs at least two āyāt of three words or more. Choose "Whole sūrah" or a bigger sūrah or juz.</div>${CREDIT}`;
+      app.onclick = (e) => { const b = e.target.closest("button"); if (b && !b.disabled) { if (b.dataset.qlang) { setQuizLang(b); return; } common(b); } };
+      return;
+    }
+    const tdraw = () => {
+      const { cw, h, sx, sy } = size(t.R), R = t.R, at = new Map();
+      t.teams.forEach((tm, ti) => tm.path.forEach((k, i) => at.set(k, [ti, i])));
+      const playing = !t.over, cur = t.teams[t.turn];
+      const cells = comb(R).map((c) => {
+        const left = (c.x + R) * sx, top = (c.r + R) * sy;
+        let cls = "", inner = "", fs = cw * 0.3, tag = "div", attrs = "", delay = "";
+        if (at.has(c.k)) {
+          const [ti, i] = at.get(c.k), tm = t.teams[ti], res = tm.res[i], tx = tm.unit.a.w[i].t;
+          fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(tx)));
+          if (res === "right") { cls = "won" + tm.cls; inner = `<span class="ar">${esc(tx)}</span>`; }
+          else if (res === "wrong") { cls = "white"; inner = `<span class="ar">${esc(tx)}</span>`; }
+          else if (playing && ti === t.turn && i === tm.pos && t.active !== null) { cls = "active"; inner = `<span class="ar">${esc(tx)}</span>`; }
+          else if (playing && ti === t.turn && i === tm.pos) { cls = "path" + tm.cls + " next"; tag = "button"; attrs = `data-tcell="1" aria-label="${tm.name}: reveal word ${i + 1} of ${t.n}"`; }
+          else cls = "path" + tm.cls;
+          if (i === 0 && !res && !(playing && ti === t.turn && t.active !== null)) inner = `<span class="tag">${tm.name.slice(-1)}</span>`;
+          if (t.fresh) { cls += " appear"; delay = `animation-delay:${i * 60}ms;`; }
+        }
+        return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
+      }).join("");
+      t.fresh = false;
+      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${tm.name}</strong> <span dir="ltr">${esc(tm.unit.name)} ${esc(tm.unit.label)}</span>
+          <span class="note">${tm.res.filter((x) => x === "right").length} right · ${tm.pos} of ${t.n} cells${tm.skip ? " · sits out next turn" : ""}</span></div>`).join("");
+      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span>` : `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}.${t.last.who ? ` ${esc(t.last.who)} sits out the next turn.` : ""}`}</div>` : "";
+      let panel;
+      if (t.over) {
+        const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${tm.name}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
+        panel = `${last}<h2 style="margin:4px 0">${t.over}</h2>${missed}<button class="btn honey" id="tnew">New match</button>`;
+      } else if (t.active === null) {
+        panel = `${last}${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}<div><strong>${cur.name}'s turn</strong> · word ${cur.pos + 1} of ${t.n}</div><div class="note">Tap ${cur.name}'s glowing cell to reveal the word.</div>`;
+      } else {
+        const w = cur.unit.a.w[cur.pos], ur = lang() === "ur";
+        panel = `<div class="note">${cur.name} · word ${cur.pos + 1} of ${t.n}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
+          <div class="opts">${t.opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}" data-to="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
+      }
+      const busy = playing && (t.active !== null || t.teams.some((tm) => tm.pos > 0));
+      app.innerHTML = `${head(busy, "Two teams race across the honeycomb, one word per turn. A wrong answer turns the cell white and costs the next turn.")}
+        <div class="teams">${score}</div>
+        <div class="row" style="justify-content:center"><button class="btn" id="tnew">${playing ? "New match" : "Play again"}</button></div>
+        <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
+        <section class="card quiz">${panel}</section>${CREDIT}`;
+    };
+    // after a team's turn: hand over, letting a team that missed sit out once; end when someone is through
+    const finished = () => {
+      const [a, b] = t.teams, done = t.teams.filter((tm) => tm.pos === t.n);
+      if (!done.length || a.turns !== b.turns) return false;
+      // both through in the same round: more right answers wins
+      const right = (tm) => tm.res.filter((x) => x === "right").length;
+      const win = done.length === 1 ? done[0] : right(a) === right(b) ? null : right(a) > right(b) ? a : b;
+      t.over = win ? `${win.name} wins!${done.length === 2 ? " (both finished; more right answers)" : ""}` : "It's a draw!";
+      return true;
+    };
+    const advance = () => {
+      t.teams[t.turn].turns++; t.note = "";
+      if (finished()) return;
+      const next = 1 - t.turn, [a, b] = t.teams;
+      if (a.skip && b.skip) { a.skip = b.skip = false; t.note = "Both teams owe a turn, so they cancel out."; }
+      else if (t.teams[next].skip) { // the other team sits out: this team goes again
+        const tm = t.teams[next]; tm.skip = false; tm.turns++; t.note = `${tm.name} sits out this turn.`;
+        if (finished()) return;
+        return;
+      }
+      t.turn = next;
+    };
+    app.onclick = (e) => {
+      const b = e.target.closest("button"); if (!b || b.disabled) return;
+      if (b.dataset.qlang) { setQuizLang(b); return tdraw(); }
+      if (common(b)) return;
+      if (b.id === "tnew") { t = match(); return tdraw(); }
+      if (b.dataset.tcell && t.active === null && !t.over) {
+        const cur = t.teams[t.turn], w = cur.unit.a.w[cur.pos];
+        t.active = cur.pos; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null;
+        return tdraw();
+      }
+      if (b.dataset.to !== undefined && t.active !== null) {
+        const cur = t.teams[t.turn], w = cur.unit.a.w[cur.pos], ok = t.opts[+b.dataset.to] === w;
+        cur.res[cur.pos] = ok ? "right" : "wrong"; cur.pos++; t.active = null;
+        if (!ok) { cur.missed.push(w); cur.skip = cur.pos < t.n; }
+        t.last = { ok, w, who: cur.name };
+        if (!ok && !cur.skip) t.last.who = ""; // last cell: nothing to sit out
+        advance();
+        return tdraw();
+      }
+    };
+    tdraw();
+  }
+
+  // buttons in the shared header; true when handled
+  const common = (b) => {
+    if (b.dataset.mode) { if (b.dataset.mode !== mode) { store.set("hiveMode", b.dataset.mode); renderHive(app); } return true; }
+    if (b.dataset.kind) {
+      if (b.dataset.kind === src.k) return true;
+      // keep the place: a sūrah opens on the juz you have practised up to, a juz on its first sūrah
+      const at = Math.max(1, store.get("upto." + src.n, 0));
+      if (b.dataset.kind === "j") pickSrc("j", JUZ.findIndex((_, j) => inJuz(j + 1, src.n, at)) + 1); else pickSrc("s", JUZ[src.n - 1][0]);
+      return true;
+    }
+    if (b.dataset.juz) { pickSrc("j", +b.dataset.juz); return true; }
+    if (b.dataset.scope) { store.set("hiveScope", b.dataset.scope); renderHive(app); return true; }
+    return false;
+  };
+  if (mode === "teams") return teams();
+
   app.onclick = (e) => {
     const t = e.target.closest("button"); if (!t || t.disabled) return;
     if (t.dataset.qlang) { setQuizLang(t); return draw(); }
-    if (t.dataset.kind) {
-      if (t.dataset.kind === src.k) return;
-      // keep the place: a sūrah opens on the juz you have practised up to, a juz on its first sūrah
-      const at = Math.max(1, store.get("upto." + src.n, 0));
-      return t.dataset.kind === "j" ? pickSrc("j", JUZ.findIndex((_, j) => inJuz(j + 1, src.n, at)) + 1) : pickSrc("s", JUZ[src.n - 1][0]);
-    }
-    if (t.dataset.juz) return pickSrc("j", +t.dataset.juz);
-    if (t.dataset.scope) { store.set("hiveScope", t.dataset.scope); return renderHive(app); }
+    if (common(t)) return;
     if (t.dataset.p) return start(g.nums.find((p) => p.key === t.dataset.p));
     if (t.id === "deal") { deal(); return toPick(); }
     if (t.id === "back") return toPick();
