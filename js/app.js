@@ -42,24 +42,25 @@ export async function surah(n) {
 const roots = async () => (ROOTS ||= await json("data/index/roots.json"));
 const forms = async () => (FORMS ||= await json("data/index/forms.json"));
 
-// ---------- live English word meanings ----------
+// ---------- live word meanings (English and Urdu) ----------
 // They come from the Quran.com API. Quran Foundation's developer terms let an app show them with a credit,
 // but not keep a copy for more than 7 days, so each sūrah's copy on the device expires after a week.
 const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
-export const CREDIT = `<p class="note credit">English word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>. Quran data provided by Quran Foundation.</p>`;
-const LIVE = new Map(); // sūrah -> { at, p: promise of { ayah: [meanings] } or null }
+const LANGS = ["en", "ur"];
+export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation.</p>`;
+const LIVE = new Map(); // "lang.sūrah" -> { at, p: promise of { ayah: [meanings] } or null }
 const cleanText = (s) => String(s || "").replace(/<sup[^>]*>.*?<\/sup>|<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-function liveMeanings(n) {
-  const mem = LIVE.get(n);
+function liveMeanings(n, lang) {
+  const key = `${lang}.${n}`, mem = LIVE.get(key);
   if (mem && Date.now() - mem.at < WEEK) return mem.p;
-  const key = `en.${n}`, saved = store.get(key, null);
-  if (saved && Date.now() - saved.at < WEEK) { LIVE.set(n, { at: saved.at, p: Promise.resolve(saved.ayahs) }); return LIVE.get(n).p; }
+  const saved = store.get(key, null);
+  if (saved && Date.now() - saved.at < WEEK) { LIVE.set(key, { at: saved.at, p: Promise.resolve(saved.ayahs) }); return LIVE.get(key).p; }
   if (saved) store.del(key);
   const p = (async () => {
     const ayahs = {};
     for (let page = 1; page; ) {
-      const r = await fetch(`${WBW_API}${n}?words=true&language=en&per_page=50&page=${page}&fields=verse_number&word_fields=char_type_name`);
+      const r = await fetch(`${WBW_API}${n}?words=true&language=${lang}&per_page=50&page=${page}&fields=verse_number&word_fields=char_type_name`);
       if (!r.ok) throw new Error(`Quran.com answered ${r.status}`);
       const d = await r.json();
       for (const v of d.verses) ayahs[v.verse_number] = v.words.filter((w) => w.char_type_name === "word").map((w) => cleanText(w.translation && w.translation.text));
@@ -67,28 +68,29 @@ function liveMeanings(n) {
     }
     store.set(key, { at: Date.now(), ayahs });
     return ayahs;
-  })().catch(() => { LIVE.delete(n); return null; }); // offline: try again next time
-  LIVE.set(n, { at: Date.now(), p });
+  })().catch(() => { LIVE.delete(key); return null; }); // offline: try again next time
+  LIVE.set(key, { at: Date.now(), p });
   return p;
 }
 // A sūrah with its meanings attached. Āyāt whose word count differs from ours are left without, so no meaning lands on the wrong word.
 export async function withMeanings(n) {
   const d = await surah(n);
-  if (!d.live) {
-    const m = await liveMeanings(n);
-    if (m) {
-      for (const a of d.ayahs) {
-        const ens = m[a.n];
-        if (ens && ens.length === a.w.length) a.w.forEach((w, i) => { if (!w.en && ens[i]) w.en = ens[i]; });
-      }
-      d.live = true;
+  d.live ||= {};
+  await Promise.all(LANGS.filter((lang) => !d.live[lang]).map(async (lang) => {
+    const m = await liveMeanings(n, lang);
+    if (!m) return;
+    for (const a of d.ayahs) {
+      const ms = m[a.n];
+      if (ms && ms.length === a.w.length) a.w.forEach((w, i) => { if (!w[lang] && ms[i]) w[lang] = ms[i]; });
     }
-  }
+    d.live[lang] = true;
+  }));
   return d;
 }
+const fromQuranCom = (d) => !!(d.live && (d.live.en || d.live.ur));
 // Fetch the course sūrahs' meanings in the background, one at a time, so the course works offline for the week.
 // Other sūrahs load theirs when opened.
-async function prefetchMeanings() { for (const n of ORDER) await liveMeanings(n); }
+async function prefetchMeanings() { for (const n of ORDER) for (const lang of LANGS) await liveMeanings(n, lang); }
 
 export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // the course: Al-Fatihah, then An-Nas back to An-Naba
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
@@ -271,7 +273,7 @@ async function reader(n, focus) {
       ${ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
     ${ready ? "" : `<div class="banner">Word meanings load from Quran.com and need an internet connection at least once a week. Tap any word to see its parts, base word and root.</div>`}
     ${versesHTML(d.ayahs, idx)}
-    ${d.live ? CREDIT : ""}`;
+    ${fromQuranCom(d) ? CREDIT : ""}`;
   prog();
   app.onclick = (e) => readingClick(e, idx);
   const el = focus && document.getElementById("a" + focus);
@@ -297,7 +299,7 @@ async function ayahView(s, a, w) {
     </section>
     <div class="row">${langHTML(ay.w)}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
     ${versesHTML([ay], idx)}
-    ${d.live ? CREDIT : ""}
+    ${fromQuranCom(d) ? CREDIT : ""}
     <div class="row">${nav(prev, `← ${prev ? prev.join(":") : ""}`)}<a class="btn" href="#/search">Search again</a>${nav(next, `${next ? next.join(":") : ""} →`)}</div>`;
   app.onclick = (e) => readingClick(e, idx);
   if (w && ay.w[w - 1]) app.querySelector(`.w[data-k="${w - 1}"]`).click();
@@ -465,7 +467,7 @@ async function practise(n) {
         <div class="opts">${q.opts.map((o, i) => `<button class="opt${q.lang === "ur" ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
         ${q.done ? `<button class="btn primary" id="next">Next word</button>` : ""}
-      </section>${d.live ? CREDIT : ""}`;
+      </section>${fromQuranCom(d) ? CREDIT : ""}`;
   };
   next(); draw();
   app.onclick = (e) => {
@@ -505,7 +507,7 @@ async function parts() {
 function about() {
   app.innerHTML = `<h1>About</h1>
     <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic. Each word shows its meaning, which fades as you learn it. The course covers Al-Fātiḥah and Juz ʿAmma; every sūrah can be read and searched.</p>
-    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English word meanings come live from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translation: Quran data provided by Quran Foundation. A copy is kept on this device for up to 7 days and then fetched again. Urdu word meanings will be added once an openly licensed source is found. Your progress stays on this device.</p>
+    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come live from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. A copy is kept on this device for up to 7 days and then fetched again. Your progress stays on this device.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit; the course sūrahs' word meanings stay available offline for 7 days after they were last fetched.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
