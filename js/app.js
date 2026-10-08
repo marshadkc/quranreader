@@ -528,7 +528,7 @@ async function practise(n, range) {
   };
   const summary = (quit) => {
     const asked = r.answered, missed = r.missed;
-    if (asked) store.set("upto." + n, Math.max(upto(n), opt.to));
+    if (asked) { store.set("upto." + n, Math.max(upto(n), opt.to)); store.set("lastPrac", n); store.set("hiveSrc", { k: "s", n }); store.set("hiveScope", "practised"); }
     app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
       <section class="card quiz">
         <h2>${quit ? "Round stopped" : "Round complete"}</h2>
@@ -602,7 +602,7 @@ async function route() {
   document.querySelectorAll(".tabs a").forEach((a) => (a.dataset.tab === tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   route.surah = h[0] === "s" || h[0] === "ayah" ? +h[1] || null : null;
   activeSurah(route.surah);
-  app.onclick = null; app.onsubmit = null; app.oninput = null;
+  app.onclick = null; app.onsubmit = null; app.oninput = null; app.onchange = null;
   let anchored = false;
   try {
     if (h[0] === "s" && h[1]) {

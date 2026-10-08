@@ -225,3 +225,5 @@ h1 small.note{font-size:14px;font-weight:400}
 .quiz .btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .btn.small{font-size:13px;padding:5px 10px}
 .practise-here{align-self:flex-start}
+.hsrc{flex-wrap:wrap;gap:10px}
+.srcpick select{font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
