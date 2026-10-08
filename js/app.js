@@ -155,6 +155,24 @@ function wordHTML(w, k, idx) {
     <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
 }
 const anyUrdu = (ws) => ws.some((w) => w.ur);
+// Quiz answers are in English or Urdu, switchable inside the practice and the Honeycomb.
+// The first time, they follow the reader: Urdu if the reader shows only Urdu.
+export const quizLang = (ws) => (anyUrdu(ws) ? store.get("quizLang", state.lang === "ur" ? "ur" : "en") : "en");
+export const quizLangHTML = (ws) => !anyUrdu(ws) ? "" : `<div class="seg" aria-label="Answers in">
+  <button data-qlang="en" aria-pressed="${quizLang(ws) === "en"}">English</button>
+  <button data-qlang="ur" aria-pressed="${quizLang(ws) === "ur"}">اردو</button></div>`;
+export const setQuizLang = (b) => { store.set("quizLang", b.dataset.qlang); document.querySelectorAll("[data-qlang]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.qlang === b.dataset.qlang)); };
+// Wrong answers: other words whose meaning differs from the right one, and from each other, in both
+// languages, so the options stay distinct whichever language they are shown in.
+export function distractors(w, pool, k = 3) {
+  const used = { en: new Set([w.en].filter(Boolean)), ur: new Set([w.ur].filter(Boolean)) }, out = [];
+  for (const x of [...pool].sort(() => Math.random() - 0.5)) {
+    if (out.length === k) break;
+    if (!hasMeaning(x) || ["en", "ur"].some((l) => x[l] && used[l].has(x[l])) || meaningOf(x, "en") === meaningOf(w, "en")) continue;
+    out.push(x); ["en", "ur"].forEach((l) => x[l] && used[l].add(x[l]));
+  }
+  return out;
+}
 // "Practise up to here": a round from the āyah after the last one practised (or from 1 when reviewing) to this one
 const upto = (n) => store.get("upto." + n, 0);
 const practiseLink = (n, a) => { const f = upto(n) < a ? upto(n) + 1 : 1; return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}` : `āyāt ${f}–${a}`}</a>`; };
@@ -450,7 +468,7 @@ const LENGTHS = [10, 20, 0]; // 0 = every word in the chosen āyāt
 async function practise(n, range) {
   const d = await withMeanings(n), all = allWords(d).filter(hasMeaning);
   if (!all.length) { app.innerHTML = `<div class="banner">This sūrah's word meanings haven't loaded, so there is nothing to practise yet.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
-  const lang = state.lang === "ur" && anyUrdu(all) ? "ur" : "en";
+  const lang = () => quizLang(all);
   const last = d.ayahs.length;
   const saved = store.get("prac." + n, null);
   const opt = saved || { from: 1, to: Math.min(last, 5), len: 10 };
@@ -466,6 +484,7 @@ async function practise(n, range) {
         <div class="range"><label>From āyah <input id="pf" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.from}"></label>
           <label>to <input id="pt" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.to}"></label>
           <button class="btn" id="pall">Whole sūrah</button></div>
+        <div class="row"><span>Answers in</span>${quizLangHTML(all) || `<span class="note">English (no Urdu meanings for this sūrah yet)</span>`}</div>
         <div class="row"><span>Words</span><div class="seg" aria-label="How many words">${LENGTHS.map((l) => `<button data-len="${l}" aria-pressed="${opt.len === l}">${l || "All"}</button>`).join("")}</div></div>
         <p class="note" id="pcount"></p>
         ${upto(n) ? `<p class="note">"Practise up to here" in the reader continues after āyah ${upto(n)}, where your last round ended. <button class="btn small" id="preset">Start over from āyah 1</button></p>` : ""}
@@ -507,26 +526,27 @@ async function practise(n, range) {
     ask();
   };
   const ask = () => {
-    const w = r.deck[r.i], right = meaningOf(w, lang);
-    const wrong = [...new Set(all.map((x) => meaningOf(x, lang)).filter((m) => m && m !== right))].sort(() => Math.random() - 0.5).slice(0, 3);
-    r.q = { w, right, opts: [right, ...wrong].sort(() => Math.random() - 0.5), done: false };
+    const w = r.deck[r.i];
+    // options are words, not text, so switching the answer language keeps the same question
+    r.q = { w, opts: [w, ...distractors(w, all)].sort(() => Math.random() - 0.5), done: false, fb: "What does the highlighted word mean?", marks: {} };
     draw();
   };
-  const draw = (fb = "What does the highlighted word mean?", marks = {}) => {
-    const { w, opts, done } = r.q, a = d.ayahs.find((x) => x.n === w.a);
+  const draw = () => {
+    const { w, opts, done, fb, marks } = r.q, a = d.ayahs.find((x) => x.n === w.a), ur = lang() === "ur";
     const again = r.i >= r.total;
-    app.innerHTML = `<div class="row"><span class="note">${again ? "Second try" : `Word ${r.i + 1} of ${r.total}`} · āyāt ${opt.from}–${opt.to}${state.combo >= 2 ? ` · streak ${state.combo}` : ""}</span><button class="btn" id="quit">Quit</button></div>
+    app.innerHTML = `<div class="row"><span class="note">${again ? "Second try" : `Word ${r.i + 1} of ${r.total}`} · āyāt ${opt.from}–${opt.to}${state.combo >= 2 ? ` · streak ${state.combo}` : ""}</span><span class="row">${quizLangHTML(all)}<button class="btn" id="quit">Quit</button></span></div>
       <div class="track"><div class="fill" style="width:${Math.round((Math.min(r.i, r.total) / r.total) * 100)}%"></div></div>
       <section class="card quiz">
         <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w.l)]}</div>
         <div class="ar big">${arHTML(w)}</div>
         <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
-        <div class="opts">${opts.map((o, i) => `<button class="opt${lang === "ur" ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>
+        <div class="opts">${opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
         ${done ? `<button class="btn primary" id="next">${r.i + 1 < r.deck.length ? "Next word" : "See my score"}</button>` : ""}
       </section>${fromQuranCom(d) ? CREDIT : ""}`;
   };
   const summary = (quit) => {
+    r.ended = true; r.quit = quit;
     const asked = r.answered, missed = r.missed;
     if (asked) { store.set("upto." + n, Math.max(upto(n), opt.to)); store.set("lastPrac", n); store.set("hiveSrc", { k: "s", n }); store.set("hiveScope", "practised"); }
     app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
@@ -534,13 +554,15 @@ async function practise(n, range) {
         <h2>${quit ? "Round stopped" : "Round complete"}</h2>
         <div class="big-score">${r.right} of ${asked}</div>
         <div class="note">right on the first try · āyāt ${opt.from}–${opt.to}${r.honey ? ` · <span class="pts">+${r.honey} honey</span>` : ""}</div>
-        ${missed.length ? `<div class="missed"><div class="note">Words to look at again</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span class="${lang === "ur" ? "ur" : ""}">${esc(meaningOf(w, lang))}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
+        ${missed.length ? `<div class="missed"><div class="row"><span class="note">Words to look at again</span>${quizLangHTML(all)}</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span class="${lang() === "ur" ? "ur" : ""}">${esc(meaningOf(w, lang()))}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
         <div class="btns"><button class="btn primary" id="again">Practise again</button>${opt.from > 1 ? `<a class="btn" href="#/s/${n}/practise/1-${opt.to}" id="widen">Review āyāt 1–${opt.to}</a>` : ""}<button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
       </section>`;
   };
   app.onsubmit = (e) => e.preventDefault();
   if (m) start(); else setup();
   app.onclick = (e) => {
+    const ql = e.target.closest("[data-qlang]");
+    if (ql) { setQuizLang(ql); return !r ? undefined : r.ended ? summary(r.quit) : draw(); }
     if (!r) return setupClick(e);
     if (e.target.id === "quit") return summary(true);
     if (e.target.id === "again") return start();
@@ -548,8 +570,8 @@ async function practise(n, range) {
     if (e.target.id === "next") { r.i++; return r.i < r.deck.length ? ask() : summary(false); }
     const o = e.target.closest(".opt"); if (!o || !r.q || r.q.done) return;
     r.q.done = true;
-    const i = +o.dataset.o, ok = r.q.opts[i] === r.q.right, marks = {}, w = r.q.w, first = r.i < r.total;
-    r.q.opts.forEach((x, j) => { if (x === r.q.right) marks[j] = "right"; });
+    const i = +o.dataset.o, w = r.q.w, ok = r.q.opts[i] === w, marks = r.q.marks, first = r.i < r.total;
+    marks[r.q.opts.indexOf(w)] = "right";
     let fb;
     if (ok) {
       state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); r.honey += p; setLevel(w.l, lv(w.l) + 1);
@@ -561,7 +583,7 @@ async function practise(n, range) {
       if (!r.retried.has(w.l)) { r.retried.add(w.l); r.deck.push(w); fb = "Not quite. The right meaning is marked, and this word comes back once at the end."; }
       else fb = "Not quite. The right meaning is marked.";
     }
-    draw(fb, marks);
+    r.q.fb = fb; draw();
   };
 }
 

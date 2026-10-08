@@ -1,7 +1,7 @@
 // Ayah Honeycomb: the Juz Amma review game.
 // An āyah's words lie on a zig-zag path of cells from the right edge of a hexagon-shaped
 // honeycomb to the left edge. Cells are answered in reading order; right = honey, wrong = red.
-import { state, store, lv, withMeanings, index, CREDIT, ORDER, arN, esc, hasMeaning, meaningOf, addHoney } from "./app.js";
+import { store, withMeanings, index, CREDIT, esc, hasMeaning, meaningOf, addHoney, quizLang, quizLangHTML, setQuizLang, distractors } from "./app.js";
 
 // First pick a sūrah or a juz, then play the āyāt you have practised in it ("Practise up to here"
 // remembers how far, per sūrah) or all of it.
@@ -75,32 +75,33 @@ export async function renderHive(app) {
   const pool = scope === "practised" ? practised : every;
   const srcName = src.k === "s" ? `Sūrah ${src.n} · ${idx.surahs[src.n - 1].en}` : `Juz ${src.n}`;
   const srcKey = src.k + src.n + scope;
-  const choose = `<label class="srcpick">Play from <select id="hsrc">
-      <optgroup label="Sūrahs">${idx.surahs.map((s) => `<option value="s${s.n}" ${src.k === "s" && src.n === s.n ? "selected" : ""}>${s.n}. ${esc(s.en)}</option>`).join("")}</optgroup>
-      <optgroup label="Juz">${JUZ.map((_, i) => `<option value="j${i + 1}" ${src.k === "j" && src.n === i + 1 ? "selected" : ""}>Juz ${i + 1}</option>`).join("")}</optgroup></select></label>`;
-  app.onchange = (e) => { if (e.target.id !== "hsrc") return; const v = e.target.value; store.set("hiveSrc", { k: v[0], n: +v.slice(1) }); store.set("hiveScope", "practised"); g = null; renderHive(app); };
+  // Step 1: Sūrah or Juz. Step 2: a sūrah from the list, or a juz number from the grid.
+  const name = (n) => `${n}. ${idx.surahs[n - 1].en}`;
+  const choose = `<div class="srcpick">
+      <div class="seg" aria-label="Play from"><button data-kind="s" aria-pressed="${src.k === "s"}">Sūrah</button><button data-kind="j" aria-pressed="${src.k === "j"}">Juz</button></div>
+      ${src.k === "s"
+        ? `<select id="hsrc" aria-label="Sūrah">${idx.surahs.map((s) => `<option value="${s.n}" ${src.n === s.n ? "selected" : ""}>${esc(name(s.n))}</option>`).join("")}</select>`
+        : `<div class="juzgrid" role="group" aria-label="Juz">${JUZ.map(([s, a], i) => `<button data-juz="${i + 1}" aria-pressed="${src.n === i + 1}" title="Juz ${i + 1} starts at ${esc(idx.surahs[s - 1].en)} ${s}:${a}">${i + 1}</button>`).join("")}</div>`}</div>`;
+  const pickSrc = (k, n) => { store.set("hiveSrc", { k, n }); store.set("hiveScope", "practised"); g = null; return renderHive(app); };
+  app.onchange = (e) => { if (e.target.id === "hsrc") pickSrc("s", +e.target.value); };
   if (!every.length) {
     app.innerHTML = `<h1>Ayah Honeycomb</h1>${choose}<div class="banner">${esc(srcName)} has no word meanings loaded yet.</div>`;
     app.onclick = null; return;
   }
-  const distract = [...new Set(words.filter(hasMeaning).map((w) => w))];
+  const distract = words.filter(hasMeaning);
   if (g && g.srcKey !== srcKey) g = null;
   if (!g) g = { srcKey, mode: "pick", nums: [], done: new Set(), R: 2, path: [], res: [], active: null, combo: 0, gain: null, last: null, fresh: false };
   const deal = () => { g.nums = [...pool].sort(() => Math.random() - 0.5).slice(0, 7); };
   if (!g.nums.length) deal();
 
-  const hasUr = words.some((w) => w.ur);
-  const lang = () => (state.lang === "ur" && hasUr ? "ur" : "en");
+  const lang = () => quizLang(words);
   const size = () => {
     const cols = 2 * g.R + 1, gap = 3, avail = Math.min(app.clientWidth - 32, 620);
     const cw = Math.max(30, Math.min(76, Math.floor((avail - gap * cols) / cols)));
     return { cw, h: cw * 1.1547, sx: cw + gap, sy: cw * 1.1547 * 0.75 + gap * 0.87 };
   };
-  const opts = (w) => {
-    const right = meaningOf(w, lang());
-    const wrong = [...new Set(distract.map((x) => meaningOf(x, lang())).filter((m) => m && m !== right))].sort(() => Math.random() - 0.5).slice(0, 3);
-    g.opts = [right, ...wrong].sort(() => Math.random() - 0.5); g.right = right;
-  };
+  // options are words, not text, so switching the answer language keeps the same question
+  const opts = (w) => { g.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); };
   const honey = (p, msg) => { addHoney(p); g.gain = `+${p} honey${msg ? " · " + msg : ""}`; };
 
   function draw() {
@@ -125,7 +126,8 @@ export async function renderHive(app) {
     g.fresh = false;
     const busy = g.mode === "play";
     let panel;
-    const gain = g.gain ? `<div class="pts">${g.gain}</div>` : "", last = g.last ? `<div class="note">${g.last}</div>` : "";
+    const gain = g.gain ? `<div class="pts">${g.gain}</div>` : "";
+    const last = g.last ? `<div class="note"><span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(g.last.t)}</span> means <strong${lang() === "ur" ? ' class="ur"' : ""}>${esc(meaningOf(g.last, lang()))}</strong>.</div>` : "";
     if (g.mode === "pick") panel = `<div>Choose an āyah above. Its cells light up from the right edge of the honeycomb.</div>
       <div class="note">10 honey for each right answer, doubled after five in a row. Finish an āyah for 20 more, or 50 if every word was right.</div>`;
     else if (busy && g.active === null) panel = `${gain}${last}<div>${esc(cur.name)} ${cur.label} · ${g.res.filter((x) => !x).length} of ${ws.length} cells left</div>
@@ -133,7 +135,7 @@ export async function renderHive(app) {
     else if (busy) {
       const w = ws[g.active];
       panel = `<div class="note">Word ${g.active + 1} of ${ws.length} · ${cur.label}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
-        <div class="opts">${g.opts.map((o, i) => `<button class="opt${lang() === "ur" ? " ur" : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>`;
+        <div class="opts">${g.opts.map((o, i) => `<button class="opt${lang() === "ur" ? " ur" : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
     } else {
       const right = g.res.filter((x) => x === "right").length;
       panel = `${gain}${last}<div><strong style="color:var(--good)">${esc(cur.name)} ${cur.label} complete.</strong> ${right} of ${ws.length} words right.</div>
@@ -141,9 +143,9 @@ export async function renderHive(app) {
     }
     app.innerHTML = `<h1>Ayah Honeycomb</h1>
       <p class="sub">Choose an āyah. Tap the glowing cell to see its word, then pick the meaning. Right answers fill with honey; wrong ones turn red.</p>
-      <div class="row hsrc">${busy ? `<span class="note">${esc(srcName)}</span>` : choose}<div class="seg" aria-label="Which āyāt">
+      <div class="hsrc">${busy ? `<span class="note">${esc(srcName)}</span>` : choose}<div class="row"><div class="seg" aria-label="Which āyāt">
         <button data-scope="practised" aria-pressed="${scope === "practised"}" ${practised.length && !busy ? "" : "disabled"}>Āyāt I've practised${practised.length ? ` (${practised.length})` : ""}</button>
-        <button data-scope="all" aria-pressed="${scope === "all"}" ${busy ? "disabled" : ""}>${src.k === "s" ? "Whole sūrah" : "Whole juz"}</button></div></div>
+        <button data-scope="all" aria-pressed="${scope === "all"}" ${busy ? "disabled" : ""}>${src.k === "s" ? "Whole sūrah" : "Whole juz"}</button></div>${quizLangHTML(words) ? `<span class="row qlang"><span class="note">Answers in</span>${quizLangHTML(words)}</span>` : ""}</div></div>
       ${practised.length ? "" : `<p class="note">Nothing practised in ${esc(srcName)} yet. Use "Practise up to here" in the reader, and those āyāt will be collected here.</p>`}
       <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.key) ? " won" : ""}" data-p="${esc(p.key)}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span>${esc(p.label)}</span></button>`).join("")}</div>
       <div class="row" style="justify-content:center"><button class="btn" id="deal" ${busy ? "disabled" : ""}>New āyāt</button>${g.combo >= 2 ? `<span class="note">Streak ${g.combo}${g.combo >= 5 ? " · double honey" : ""}</span>` : ""}</div>
@@ -155,16 +157,23 @@ export async function renderHive(app) {
 
   app.onclick = (e) => {
     const t = e.target.closest("button"); if (!t || t.disabled) return;
+    if (t.dataset.qlang) { setQuizLang(t); return draw(); }
+    if (t.dataset.kind) {
+      if (t.dataset.kind === src.k) return;
+      // keep the place: a sūrah opens on its juz, a juz on its first sūrah
+      return t.dataset.kind === "j" ? pickSrc("j", JUZ.findIndex((_, j) => inJuz(j + 1, src.n, 1)) + 1) : pickSrc("s", JUZ[src.n - 1][0]);
+    }
+    if (t.dataset.juz) return pickSrc("j", +t.dataset.juz);
     if (t.dataset.scope) { store.set("hiveScope", t.dataset.scope); return renderHive(app); }
     if (t.dataset.p) return start(g.nums.find((p) => p.key === t.dataset.p));
     if (t.id === "deal") { deal(); return toPick(); }
     if (t.id === "back") return toPick();
     if (t.dataset.cell !== undefined && g.mode === "play" && g.active === null) { g.active = +t.dataset.cell; opts(g.cur.a.w[g.active]); g.gain = null; return draw(); }
     if (t.dataset.o !== undefined && g.active !== null) {
-      const i = g.active, w = g.cur.a.w[i], ok = g.opts[+t.dataset.o] === g.right;
+      const i = g.active, w = g.cur.a.w[i], ok = g.opts[+t.dataset.o] === w;
       g.res[i] = ok ? "right" : "wrong"; g.active = null; g.gain = null;
       if (ok) { g.combo++; honey(g.combo >= 5 ? 20 : 10, g.combo >= 5 ? "streak" : ""); g.last = null; }
-      else { g.combo = 0; g.last = `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(w.t)}</span> means <strong>${esc(g.right)}</strong>.`; }
+      else { g.combo = 0; g.last = w; }
       if (g.res.every(Boolean)) {
         g.mode = "won"; g.done.add(g.cur.key);
         const perfect = g.res.every((x) => x === "right");
