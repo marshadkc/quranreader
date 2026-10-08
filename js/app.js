@@ -440,47 +440,117 @@ async function wordSearch(raw, pick) {
   };
 }
 
-// Practice: lowest level first, frequent words first
-let q = null, qDone = 0;
+// Practice: pick the āyāt and how many words, then a fixed-length round that can be left at any time.
+// Each base word comes up once (weakest and most frequent first); a missed word comes back once at the end.
+const LENGTHS = [10, 20, 0]; // 0 = every word in the chosen āyāt
 async function practise(n) {
-  const d = await withMeanings(n), ws = allWords(d).filter(hasMeaning);
-  if (!ws.length) { app.innerHTML = `<div class="banner">This sūrah's word meanings haven't loaded, so there is nothing to practise yet. They come from Quran.com and need an internet connection at least once a week.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
-  const lang = state.lang === "ur" && anyUrdu(ws) ? "ur" : "en";
-  const next = () => {
-    const lemmas = [...new Map(ws.map((w) => [w.l, w])).values()]
-      .sort((a, b) => lv(a.l) - lv(b.l) || b.f - a.f || Math.random() - 0.5).slice(0, 4);
-    const pick = lemmas[Math.floor(Math.random() * Math.min(2, lemmas.length))];
-    const occ = ws.filter((w) => w.l === pick.l), w = occ[Math.floor(Math.random() * occ.length)];
-    const right = meaningOf(w, lang);
-    const wrong = [...new Set(ws.map((x) => meaningOf(x, lang)).filter((m) => m && m !== right))].sort(() => Math.random() - 0.5).slice(0, 3);
-    q = { w, right, opts: [right, ...wrong].sort(() => Math.random() - 0.5), done: false, lang };
+  const d = await withMeanings(n), all = allWords(d).filter(hasMeaning);
+  if (!all.length) { app.innerHTML = `<div class="banner">This sūrah's word meanings haven't loaded, so there is nothing to practise yet.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
+  const lang = state.lang === "ur" && anyUrdu(all) ? "ur" : "en";
+  const last = d.ayahs.length;
+  const saved = store.get("prac." + n, null);
+  const opt = saved || { from: 1, to: Math.min(last, 5), len: 10 };
+  opt.from = Math.min(Math.max(1, opt.from), last); opt.to = Math.min(Math.max(opt.from, opt.to), last);
+
+  const setup = () => {
+    app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
+      <section class="card practise-setup">
+        <h2>Practise ${esc(d.en)}</h2>
+        <p class="note">Choose the āyāt you have just studied. Each word comes up once; any you miss come back once at the end.</p>
+        <div class="range"><label>From āyah <input id="pf" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.from}"></label>
+          <label>to <input id="pt" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.to}"></label>
+          <button class="btn" id="pall">Whole sūrah</button></div>
+        <div class="row"><span>Words</span><div class="seg" aria-label="How many words">${LENGTHS.map((l) => `<button data-len="${l}" aria-pressed="${opt.len === l}">${l || "All"}</button>`).join("")}</div></div>
+        <p class="note" id="pcount"></p>
+        <button class="btn primary" id="pgo">Start</button>
+      </section>`;
+    count();
+    app.oninput = count;
+  };
+  const count = () => {
+    const f = +$("#pf").value || 1, to = +$("#pt").value || f;
+    const k = new Set(all.filter((w) => w.a >= f && w.a <= to).map((w) => w.l)).size;
+    $("#pcount").textContent = k ? `${k} different words in āyāt ${f}–${to}. This round: ${opt.len ? Math.min(opt.len, k) : k}.` : "No words in that range.";
+  };
+  const setupClick = (e) => {
+      const lb = e.target.closest("[data-len]");
+      if (lb) { opt.len = +lb.dataset.len; app.querySelectorAll("[data-len]").forEach((b) => b.setAttribute("aria-pressed", b === lb)); return count(); }
+      if (e.target.id === "pall") { $("#pf").value = 1; $("#pt").value = last; return count(); }
+      if (e.target.id === "pgo") {
+        let f = Math.min(Math.max(1, +$("#pf").value || 1), last), to = Math.min(Math.max(1, +$("#pt").value || f), last);
+        if (f > to) [f, to] = [to, f];
+        Object.assign(opt, { from: f, to }); store.set("prac." + n, opt);
+        start();
+      }
+  };
+
+  let r = null; // the current round
+  const start = () => {
+    const pool = all.filter((w) => w.a >= opt.from && w.a <= opt.to);
+    const byLemma = new Map();
+    for (const w of pool) { if (!byLemma.has(w.l)) byLemma.set(w.l, []); byLemma.get(w.l).push(w); }
+    let deck = [...byLemma.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)])
+      .sort((a, b) => lv(a.l) - lv(b.l) || b.f - a.f || Math.random() - 0.5);
+    if (opt.len) deck = deck.slice(0, opt.len);
+    deck.sort(() => Math.random() - 0.5);
+    if (!deck.length) return;
+    app.oninput = null;
+    r = { deck, i: 0, total: deck.length, answered: 0, right: 0, honey: 0, missed: [], retried: new Set(), q: null };
+    ask();
+  };
+  const ask = () => {
+    const w = r.deck[r.i], right = meaningOf(w, lang);
+    const wrong = [...new Set(all.map((x) => meaningOf(x, lang)).filter((m) => m && m !== right))].sort(() => Math.random() - 0.5).slice(0, 3);
+    r.q = { w, right, opts: [right, ...wrong].sort(() => Math.random() - 0.5), done: false };
+    draw();
   };
   const draw = (fb = "What does the highlighted word mean?", marks = {}) => {
-    const w = q.w, a = d.ayahs.find((x) => x.n === w.a);
-    app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a><span class="note">Answered ${qDone}${state.combo >= 2 ? ` · streak ${state.combo}` : ""}</span></div>
+    const { w, opts, done } = r.q, a = d.ayahs.find((x) => x.n === w.a);
+    const again = r.i >= r.total;
+    app.innerHTML = `<div class="row"><span class="note">${again ? "Second try" : `Word ${r.i + 1} of ${r.total}`} · āyāt ${opt.from}–${opt.to}${state.combo >= 2 ? ` · streak ${state.combo}` : ""}</span><button class="btn" id="quit">Quit</button></div>
+      <div class="track"><div class="fill" style="width:${Math.round((Math.min(r.i, r.total) / r.total) * 100)}%"></div></div>
       <section class="card quiz">
-        <div class="note">This word: ${LABEL[lv(w.l)]}</div>
+        <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w.l)]}</div>
         <div class="ar big">${arHTML(w)}</div>
         <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
-        <div class="opts">${q.opts.map((o, i) => `<button class="opt${q.lang === "ur" ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>
+        <div class="opts">${opts.map((o, i) => `<button class="opt${lang === "ur" ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
-        ${q.done ? `<button class="btn primary" id="next">Next word</button>` : ""}
+        ${done ? `<button class="btn primary" id="next">${r.i + 1 < r.deck.length ? "Next word" : "See my score"}</button>` : ""}
       </section>${fromQuranCom(d) ? CREDIT : ""}`;
   };
-  next(); draw();
+  const summary = (quit) => {
+    const asked = r.answered, missed = r.missed;
+    app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
+      <section class="card quiz">
+        <h2>${quit ? "Round stopped" : "Round complete"}</h2>
+        <div class="big-score">${r.right} of ${asked}</div>
+        <div class="note">right on the first try · āyāt ${opt.from}–${opt.to}${r.honey ? ` · <span class="pts">+${r.honey} honey</span>` : ""}</div>
+        ${missed.length ? `<div class="missed"><div class="note">Words to look at again</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span class="${lang === "ur" ? "ur" : ""}">${esc(meaningOf(w, lang))}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
+        <div class="btns"><button class="btn primary" id="again">Practise again</button><button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
+      </section>`;
+  };
+  app.onsubmit = (e) => e.preventDefault();
+  setup();
   app.onclick = (e) => {
-    if (e.target.id === "next") { next(); return draw(); }
-    const o = e.target.closest(".opt"); if (!o || q.done) return;
-    q.done = true; qDone++;
-    const i = +o.dataset.o, ok = q.opts[i] === q.right, marks = {};
-    q.opts.forEach((x, j) => { if (x === q.right) marks[j] = "right"; });
+    if (!r) return setupClick(e);
+    if (e.target.id === "quit") return summary(true);
+    if (e.target.id === "again") return start();
+    if (e.target.id === "other") { r = null; return setup(); }
+    if (e.target.id === "next") { r.i++; return r.i < r.deck.length ? ask() : summary(false); }
+    const o = e.target.closest(".opt"); if (!o || !r.q || r.q.done) return;
+    r.q.done = true;
+    const i = +o.dataset.o, ok = r.q.opts[i] === r.q.right, marks = {}, w = r.q.w, first = r.i < r.total;
+    r.q.opts.forEach((x, j) => { if (x === r.q.right) marks[j] = "right"; });
     let fb;
     if (ok) {
-      state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); setLevel(q.w.l, lv(q.w.l) + 1);
+      state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); r.honey += p; setLevel(w.l, lv(w.l) + 1);
+      if (first) { r.right++; r.answered++; }
       fb = `<span class="pts">+${p} honey</span> Correct. This meaning will fade a little more in the reader.`;
     } else {
-      marks[i] = "wrong"; state.combo = 0; setLevel(q.w.l, lv(q.w.l) - 1);
-      fb = "Not quite. The right meaning is marked, and you'll see this word again soon.";
+      marks[i] = "wrong"; state.combo = 0; setLevel(w.l, lv(w.l) - 1);
+      if (first) { r.missed.push(w); r.answered++; }
+      if (!r.retried.has(w.l)) { r.retried.add(w.l); r.deck.push(w); fb = "Not quite. The right meaning is marked, and this word comes back once at the end."; }
+      else fb = "Not quite. The right meaning is marked.";
     }
     draw(fb, marks);
   };
@@ -523,7 +593,7 @@ async function route() {
   document.querySelectorAll(".tabs a").forEach((a) => (a.dataset.tab === tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   route.surah = h[0] === "s" || h[0] === "ayah" ? +h[1] || null : null;
   activeSurah(route.surah);
-  app.onclick = null; app.onsubmit = null;
+  app.onclick = null; app.onsubmit = null; app.oninput = null;
   let anchored = false;
   try {
     if (h[0] === "s" && h[1]) {
