@@ -225,5 +225,11 @@ h1 small.note{font-size:14px;font-weight:400}
 .quiz .btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .btn.small{font-size:13px;padding:5px 10px}
 .practise-here{align-self:flex-start}
-.hsrc{flex-wrap:wrap;gap:10px}
-.srcpick select{font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
+.hsrc{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.srcpick{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+.srcpick select{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);min-width:0;flex:1 1 220px;max-width:340px}
+.juzgrid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;flex:1 1 300px;max-width:440px}
+.juzgrid button{font:inherit;font-size:14px;font-variant-numeric:tabular-nums;padding:6px 0;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}
+.juzgrid button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.qlang{gap:6px}
+@media (max-width:520px){.juzgrid{grid-template-columns:repeat(6,minmax(0,1fr))}}
