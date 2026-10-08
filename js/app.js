@@ -9,6 +9,7 @@ const app = $("#app");
 export const store = {
   get(k, d) { try { const v = localStorage.getItem("qwr." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem("qwr." + k, JSON.stringify(v)); } catch { /* ignore */ } },
+  del(k) { try { localStorage.removeItem("qwr." + k); } catch { /* ignore */ } },
 };
 
 export const state = {
@@ -40,6 +41,56 @@ export async function surah(n) {
 }
 const roots = async () => (ROOTS ||= await json("data/index/roots.json"));
 const forms = async () => (FORMS ||= await json("data/index/forms.json"));
+
+// ---------- word meanings (English and Urdu) ----------
+// They are bundled in data/s/NNN.json from glosses/ (imported from Quran.com with tools/import_meanings.py).
+// If a sūrah or language has none bundled, they are fetched live from the Quran.com API instead and kept
+// on the device for at most 7 days, as Quran Foundation's developer terms ask for live use.
+const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+const LANGS = ["en", "ur"];
+export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation.</p>`;
+const LIVE = new Map(); // "lang.sūrah" -> { at, p: promise of { ayah: [meanings] } or null }
+const cleanText = (s) => String(s || "").replace(/<sup[^>]*>.*?<\/sup>|<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+function liveMeanings(n, lang) {
+  const key = `${lang}.${n}`, mem = LIVE.get(key);
+  if (mem && Date.now() - mem.at < WEEK) return mem.p;
+  const saved = store.get(key, null);
+  if (saved && Date.now() - saved.at < WEEK) { LIVE.set(key, { at: saved.at, p: Promise.resolve(saved.ayahs) }); return LIVE.get(key).p; }
+  if (saved) store.del(key);
+  const p = (async () => {
+    const ayahs = {};
+    for (let page = 1; page; ) {
+      const r = await fetch(`${WBW_API}${n}?words=true&language=${lang}&per_page=50&page=${page}&fields=verse_number&word_fields=char_type_name`);
+      if (!r.ok) throw new Error(`Quran.com answered ${r.status}`);
+      const d = await r.json();
+      for (const v of d.verses) ayahs[v.verse_number] = v.words.filter((w) => w.char_type_name === "word").map((w) => cleanText(w.translation && w.translation.text));
+      page = d.pagination && d.pagination.next_page;
+    }
+    store.set(key, { at: Date.now(), ayahs });
+    return ayahs;
+  })().catch(() => { LIVE.delete(key); return null; }); // offline: try again next time
+  LIVE.set(key, { at: Date.now(), p });
+  return p;
+}
+// A sūrah with its meanings attached. Āyāt whose word count differs from ours are left without, so no meaning lands on the wrong word.
+export async function withMeanings(n) {
+  const d = await surah(n);
+  d.live ||= {};
+  const bundled = (lang) => d.ayahs.some((a) => a.w.some((w) => w[lang]));
+  await Promise.all(LANGS.filter((lang) => !d.live[lang] && !bundled(lang)).map(async (lang) => {
+    const m = await liveMeanings(n, lang);
+    if (!m) return;
+    for (const a of d.ayahs) {
+      const ms = m[a.n];
+      if (ms && ms.length === a.w.length) a.w.forEach((w, i) => { if (!w[lang] && ms[i]) w[lang] = ms[i]; });
+    }
+    d.live[lang] = true;
+  }));
+  return d;
+}
+const fromQuranCom = (d) => d.ayahs.some((a) => a.w.some(hasMeaning));
+
 export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // the course: Al-Fatihah, then An-Nas back to An-Naba
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -103,9 +154,10 @@ function wordHTML(w, k, idx) {
   return `<button class="w lv${hasMeaning(w) ? lv(w.l) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
     <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
 }
+const anyUrdu = (ws) => ws.some((w) => w.ur);
 function versesHTML(ayahs, idx) {
   let k = 0;
-  const lang = state.lang;
+  const lang = anyUrdu(ayahs.flatMap((a) => a.w)) ? state.lang : "en"; // no Urdu meanings yet: show the English
   return `<div class="verses ${lang === "en" ? "only-en" : lang === "ur" ? "only-ur" : ""}" id="verses">
     ${ayahs.map((a) => {
       const faded = a.w.every((w) => lv(w.l) >= 2);
@@ -115,7 +167,7 @@ function versesHTML(ayahs, idx) {
       </article>`;
     }).join("")}</div><div id="sheetbox"></div>`;
 }
-const langHTML = () => `<div class="seg" aria-label="Meaning language">
+const langHTML = (ws) => !anyUrdu(ws) ? "" : `<div class="seg" aria-label="Meaning language">
   <button data-lang="both" aria-pressed="${state.lang === "both"}">Both</button>
   <button data-lang="en" aria-pressed="${state.lang === "en"}">English</button>
   <button data-lang="ur" aria-pressed="${state.lang === "ur"}">اردو</button></div>`;
@@ -176,7 +228,6 @@ function readingClick(e, idx) {
 async function home() {
   const idx = await index();
   const course = idx.surahs.filter((s) => s.course);
-  const ready = course.filter((s) => s.ready).length;
   const loaded = await Promise.all(ORDER.map(surah));
   const pct = unaided(loaded.filter((d) => d.n !== 1).flatMap(allWords));
   app.innerHTML = `
@@ -188,12 +239,11 @@ async function home() {
       <div class="track"><div class="fill" style="width:${pct}%"></div></div>
     </section>
     <div class="row"><span class="note">All 114 sūrahs are in the sūrah list. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
-    ${ready < course.length ? `<div class="banner">Word meanings are added for ${ready} of ${course.length} course sūrahs so far. Every sūrah already shows the Arabic, each word's parts and its root.</div>` : ""}
     <ul class="list">
       ${ORDER.map((n) => {
         const s = idx.surahs.find((x) => x.n === n), p = unaided(allWords(SURAH.get(n)));
         return `<li><a href="#/s/${n}"><span class="num">${n}</span>
-          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words} words${s.ready ? "" : " · meanings coming"}</small>
+          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words} words</small>
           <span class="mini"><i style="width:${p}%"></i></span></span>
           <span class="arname">${esc(s.ar)}</span></a></li>`;
       }).join("")}
@@ -203,7 +253,7 @@ async function home() {
 async function reader(n, focus) {
   const idx = await index(), meta = idx.surahs.find((s) => s.n === n);
   if (!meta) throw new Error(`there is no sūrah ${n}`);
-  const d = await surah(n), ws = allWords(d);
+  const d = await withMeanings(n), ws = allWords(d), ready = ws.some(hasMeaning);
   const prog = () => {
     const pct = unaided(ws);
     $("#prog").innerHTML = `<span>Read without help</span><strong>${pct}% · ${ws.filter((w) => lv(w.l) >= 3).length} of ${ws.length} words</strong>`;
@@ -217,10 +267,11 @@ async function reader(n, focus) {
       <div class="row" id="prog"></div>
       <div class="track"><div class="fill" id="progfill"></div></div>
     </section>
-    <div class="row">${langHTML()}
-      ${meta.ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
-    ${meta.ready ? "" : `<div class="banner">Meanings for this sūrah haven't been added yet. Tap any word to see its parts, base word and root.</div>`}
-    ${versesHTML(d.ayahs, idx)}`;
+    <div class="row">${langHTML(ws)}
+      ${ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
+    ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
+    ${versesHTML(d.ayahs, idx)}
+    ${fromQuranCom(d) ? CREDIT : ""}`;
   prog();
   app.onclick = (e) => readingClick(e, idx);
   const el = focus && document.getElementById("a" + focus);
@@ -234,7 +285,7 @@ async function ayahView(s, a, w) {
     app.innerHTML = `<div class="banner">${meta ? `${esc(meta.en)} has ${meta.ayahs} āyāt, so there is no āyah ${a}.` : `There is no sūrah ${s}. The Quran has 114.`}</div><a class="btn" href="#/search">Back to search</a>`;
     return;
   }
-  const d = await surah(s), ay = d.ayahs.find((x) => x.n === a);
+  const d = await withMeanings(s), ay = d.ayahs.find((x) => x.n === a);
   const prev = a > 1 ? [s, a - 1] : s > 1 ? [s - 1, idx.surahs[s - 2].ayahs] : null;
   const next = a < meta.ayahs ? [s, a + 1] : s < 114 ? [s + 1, 1] : null;
   const nav = (p, label) => (p ? `<a class="btn" href="#/ayah/${p[0]}/${p[1]}">${label}</a>` : "<span></span>");
@@ -244,8 +295,9 @@ async function ayahView(s, a, w) {
       <div class="eyebrow">Sūrah ${s} · āyah ${a} of ${meta.ayahs} · ${ay.w.length} words</div>
       <div class="row"><h1>${esc(meta.en)} ${s}:${a}</h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
     </section>
-    <div class="row">${langHTML()}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
+    <div class="row">${langHTML(ay.w)}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
     ${versesHTML([ay], idx)}
+    ${fromQuranCom(d) ? CREDIT : ""}
     <div class="row">${nav(prev, `← ${prev ? prev.join(":") : ""}`)}<a class="btn" href="#/search">Search again</a>${nav(next, `${next ? next.join(":") : ""} →`)}</div>`;
   app.onclick = (e) => readingClick(e, idx);
   if (w && ay.w[w - 1]) app.querySelector(`.w[data-k="${w - 1}"]`).click();
@@ -391,9 +443,9 @@ async function wordSearch(raw, pick) {
 // Practice: lowest level first, frequent words first
 let q = null, qDone = 0;
 async function practise(n) {
-  const d = await surah(n), ws = allWords(d).filter(hasMeaning);
-  if (!ws.length) { app.innerHTML = `<div class="banner">Meanings for this sūrah haven't been added yet, so there is nothing to practise.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
-  const lang = state.lang === "ur" ? "ur" : "en";
+  const d = await withMeanings(n), ws = allWords(d).filter(hasMeaning);
+  if (!ws.length) { app.innerHTML = `<div class="banner">This sūrah's word meanings haven't loaded, so there is nothing to practise yet. They come from Quran.com and need an internet connection at least once a week.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
+  const lang = state.lang === "ur" && anyUrdu(ws) ? "ur" : "en";
   const next = () => {
     const lemmas = [...new Map(ws.map((w) => [w.l, w])).values()]
       .sort((a, b) => lv(a.l) - lv(b.l) || b.f - a.f || Math.random() - 0.5).slice(0, 4);
@@ -413,7 +465,7 @@ async function practise(n) {
         <div class="opts">${q.opts.map((o, i) => `<button class="opt${q.lang === "ur" ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(o)}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
         ${q.done ? `<button class="btn primary" id="next">Next word</button>` : ""}
-      </section>`;
+      </section>${fromQuranCom(d) ? CREDIT : ""}`;
   };
   next(); draw();
   app.onclick = (e) => {
@@ -453,7 +505,7 @@ async function parts() {
 function about() {
   app.innerHTML = `<h1>About</h1>
     <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic. Each word shows its meaning, which fades as you learn it. The course covers Al-Fātiḥah and Juz ʿAmma; every sūrah can be read and searched.</p>
-    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. Word meanings are being added from open sources and will be credited here. Your progress stays on this device.</p>
+    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {

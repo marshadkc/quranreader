@@ -2,7 +2,8 @@
 """Import word-by-word English and Urdu meanings from the Quran.com API into glosses/NNN.tsv.
 
 Run this where the network allows api.quran.com, then run tools/build_data.py.
-Check the license of each resource before publishing the app with it.
+Quran Foundation's developer terms do not allow storing their content as files; the project owner chose to
+bundle the meanings anyway (see glosses/README.md). Without glosses the app fetches them live instead.
 
 Usage
   python3 tools/import_meanings.py                 all surahs in the app
@@ -68,7 +69,7 @@ def main():
             print(f"{s:03d}: glosses exist, skipped (use --force)")
             continue
         en, ur = fetch(s, "en", a.verse_en), fetch(s, "ur", a.verse_ur)
-        lines = [f"# Surah {s}: word meanings imported from api.quran.com. Check the license before publishing."]
+        lines = [f"# Surah {s}: word meanings from Quran.com (Quran Foundation); Urdu by Dr. Farhat Hashmi, Al-Huda International."]
         skipped = []
         for ay in sorted(en):
             n = counts.get((s, ay), 0)
