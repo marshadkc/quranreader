@@ -8,7 +8,7 @@ import { store, withMeanings, index, CREDIT, esc, hasMeaning, meaningOf, addHone
 // Where each juz starts: [sūrah, āyah]
 const JUZ = [[1, 1], [2, 142], [2, 253], [3, 93], [4, 24], [4, 148], [5, 82], [6, 111], [7, 88], [8, 41], [9, 93], [11, 6], [12, 53], [15, 1], [17, 1], [18, 75], [21, 1], [23, 1], [25, 21], [27, 56], [29, 46], [33, 31], [36, 28], [39, 32], [41, 47], [46, 1], [51, 31], [58, 1], [67, 1], [78, 1]];
 const inJuz = (j, s, a) => { const [s0, a0] = JUZ[j - 1], [s1, a1] = JUZ[j] || [115, 1]; return (s > s0 || (s === s0 && a >= a0)) && (s < s1 || (s === s1 && a < a1)); };
-const MAX = 20; // longer āyāt are played in parts of at most this many words, so each fits the honeycomb
+const MAX = 13; // longer āyāt are played in parts of at most this many words, so each flows across a 37-cell honeycomb
 function units(d) {
   return d.ayahs.filter((a) => a.w.every(hasMeaning)).flatMap((a) => {
     const parts = Math.ceil(a.w.length / MAX), size = Math.ceil(a.w.length / parts);
@@ -30,11 +30,10 @@ function comb(R) {
 }
 // The path flows like a river: from the right edge to the left edge in smooth diagonal runs that swing
 // between the top and bottom of the comb. It never drops straight down or up (two diagonals that cancel
-// sideways), and only bends back to the right now and then when a long āyah needs the room.
-const radiusFor = (n) => (n < 2 ? 0 : Math.max(1, Math.ceil((n - 1) / 5)));
-const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1], NE: [1, -1], SE: [0, 1] };
-const VERT = { NW: "up", NE: "up", SW: "down", SE: "down" }, BACK = new Set(["NE", "SE"]);
-const STRAIGHT = new Set(["NW,NE", "NE,NW", "SW,SE", "SE,SW", "NE,SE", "SE,NE"]); // waterfalls and sharp hooks
+// sideways) and never turns back to the right.
+const radiusFor = (n) => (n < 2 ? 0 : Math.max(1, Math.ceil((n - 1) / 4))); // a diagonal river of 4R + 1 cells fits
+const STEPS = { W: [-1, 0], NW: [0, -1], SW: [-1, 1] }; // straight left and the two left diagonals
+const VERT = { NW: "up", SW: "down" };
 
 function walk(n, R) {
   const cells = comb(R), byKey = new Map(cells.map((c) => [c.k, c]));
@@ -58,13 +57,10 @@ function walk(n, R) {
       if (--budget < 0) return false;
       const rem = n - path.length;
       if (rem === 0) return c.leftEnd;
-      if (dist.get(c.k) > rem) return false;
-      // room to spare: cells left over if the river ran straight to the left edge from here
-      const spare = rem - Math.ceil((c.x + R) * 2);
+      if (dist.get(c.k) > rem || rem > 2 * (c.x + R)) return false; // can't reach the left edge in exactly rem steps
       const was = head;
       if ((head === "up" && c.r === -R) || (head === "down" && c.r === R) || (run >= 2 * R && Math.random() < 0.5)) head = head === "up" ? "down" : "up";
       const pref = (m) => {
-        if (BACK.has(m)) return spare > 0 ? 2 + Math.random() : 9; // a bend back right: only when needed
         const v = VERT[m];
         if (m === last) return Math.random() * 0.5; // keep flowing the same way
         if (v === head) return 0.3 + Math.random() * 0.5;
@@ -72,7 +68,7 @@ function walk(n, R) {
         return 1.4 + Math.random();
       };
       const opts = Object.entries(STEPS).map(([m, [dq, dr]]) => ({ m, c: byKey.get(c.q + dq + "," + (c.r + dr)) }))
-        .filter((o) => o.c && !seen.has(o.c.k) && !STRAIGHT.has(last + "," + o.m)).map((o) => ({ ...o, p: pref(o.m) })).sort((a, b) => a.p - b.p);
+        .filter((o) => o.c && !seen.has(o.c.k) && !(last && last !== "W" && o.m !== "W" && o.m !== last && run < 2)).map((o) => ({ ...o, p: pref(o.m) })).sort((a, b) => a.p - b.p);
       for (const o of opts) {
         seen.add(o.c.k); path.push(o.c.k);
         if (go(o.c, o.m, o.m === last ? run + 1 : 1)) return true;
