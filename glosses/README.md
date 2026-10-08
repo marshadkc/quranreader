@@ -11,10 +11,10 @@ Lines starting with `#` are comments. Words are listed in reading order (right t
 and each āyah must have exactly as many meanings as it has words; `tools/build_data.py` checks this.
 `python3 tools/build_data.py --list 112` prints a sūrah's words to help.
 
-No meanings are bundled yet. The app currently shows English and Urdu word meanings live from the Quran.com API
-(word-by-word English, and Urdu by Dr. Farhat Hashmi of Al-Huda International, credited "Quran data provided by Quran Foundation"), keeping a copy on the device for at most 7 days,
-because Quran Foundation's developer terms do not allow storing their content longer or sharing it as a dataset.
-That is also why `glosses/` stays empty: Quran.com data must not be committed here without written permission.
+All 114 sūrahs have English and Urdu word meanings, imported from Quran.com's word-by-word translations
+with `tools/import_meanings.py` (Urdu by Dr. Farhat Hashmi, Al-Huda International; Quran data provided by Quran Foundation).
+Quran Foundation's developer terms do not allow storing their content as files; the project owner chose to bundle them
+anyway for offline use and handles any objection. If they must be removed, delete these files and rebuild: the app then
+fetches the meanings live from Quran.com again.
 
-`tools/import_meanings.py` turns the Quran.com word-by-word data into these files. Use it only once a source's owner has
-confirmed in writing that the meanings may be bundled with the app; it checks every āyah's word count against ours.
+`tools/import_meanings.py --force` re-imports them; it checks every āyah's word count against ours.

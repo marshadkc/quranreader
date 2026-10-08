@@ -42,9 +42,10 @@ export async function surah(n) {
 const roots = async () => (ROOTS ||= await json("data/index/roots.json"));
 const forms = async () => (FORMS ||= await json("data/index/forms.json"));
 
-// ---------- live word meanings (English and Urdu) ----------
-// They come from the Quran.com API. Quran Foundation's developer terms let an app show them with a credit,
-// but not keep a copy for more than 7 days, so each sūrah's copy on the device expires after a week.
+// ---------- word meanings (English and Urdu) ----------
+// They are bundled in data/s/NNN.json from glosses/ (imported from Quran.com with tools/import_meanings.py).
+// If a sūrah or language has none bundled, they are fetched live from the Quran.com API instead and kept
+// on the device for at most 7 days, as Quran Foundation's developer terms ask for live use.
 const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 const LANGS = ["en", "ur"];
@@ -76,7 +77,8 @@ function liveMeanings(n, lang) {
 export async function withMeanings(n) {
   const d = await surah(n);
   d.live ||= {};
-  await Promise.all(LANGS.filter((lang) => !d.live[lang]).map(async (lang) => {
+  const bundled = (lang) => d.ayahs.some((a) => a.w.some((w) => w[lang]));
+  await Promise.all(LANGS.filter((lang) => !d.live[lang] && !bundled(lang)).map(async (lang) => {
     const m = await liveMeanings(n, lang);
     if (!m) return;
     for (const a of d.ayahs) {
@@ -87,10 +89,7 @@ export async function withMeanings(n) {
   }));
   return d;
 }
-const fromQuranCom = (d) => !!(d.live && (d.live.en || d.live.ur));
-// Fetch the course sūrahs' meanings in the background, one at a time, so the course works offline for the week.
-// Other sūrahs load theirs when opened.
-async function prefetchMeanings() { for (const n of ORDER) for (const lang of LANGS) await liveMeanings(n, lang); }
+const fromQuranCom = (d) => d.ayahs.some((a) => a.w.some(hasMeaning));
 
 export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // the course: Al-Fatihah, then An-Nas back to An-Naba
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
@@ -249,7 +248,6 @@ async function home() {
           <span class="arname">${esc(s.ar)}</span></a></li>`;
       }).join("")}
     </ul>`;
-  prefetchMeanings();
 }
 
 async function reader(n, focus) {
@@ -271,7 +269,7 @@ async function reader(n, focus) {
     </section>
     <div class="row">${langHTML(ws)}
       ${ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
-    ${ready ? "" : `<div class="banner">Word meanings load from Quran.com and need an internet connection at least once a week. Tap any word to see its parts, base word and root.</div>`}
+    ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
     ${versesHTML(d.ayahs, idx)}
     ${fromQuranCom(d) ? CREDIT : ""}`;
   prog();
@@ -507,8 +505,8 @@ async function parts() {
 function about() {
   app.innerHTML = `<h1>About</h1>
     <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic. Each word shows its meaning, which fades as you learn it. The course covers Al-Fātiḥah and Juz ʿAmma; every sūrah can be read and searched.</p>
-    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come live from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. A copy is kept on this device for up to 7 days and then fetched again. Your progress stays on this device.</p>
-    <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit; the course sūrahs' word meanings stay available offline for 7 days after they were last fetched.</p></div>
+    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device.</p>
+    <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
     if (e.target.id !== "reset") return;
