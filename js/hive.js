@@ -188,8 +188,9 @@ export async function renderHive(app) {
     if (t.dataset.qlang) { setQuizLang(t); return draw(); }
     if (t.dataset.kind) {
       if (t.dataset.kind === src.k) return;
-      // keep the place: a sūrah opens on its juz, a juz on its first sūrah
-      return t.dataset.kind === "j" ? pickSrc("j", JUZ.findIndex((_, j) => inJuz(j + 1, src.n, 1)) + 1) : pickSrc("s", JUZ[src.n - 1][0]);
+      // keep the place: a sūrah opens on the juz you have practised up to, a juz on its first sūrah
+      const at = Math.max(1, store.get("upto." + src.n, 0));
+      return t.dataset.kind === "j" ? pickSrc("j", JUZ.findIndex((_, j) => inJuz(j + 1, src.n, at)) + 1) : pickSrc("s", JUZ[src.n - 1][0]);
     }
     if (t.dataset.juz) return pickSrc("j", +t.dataset.juz);
     if (t.dataset.scope) { store.set("hiveScope", t.dataset.scope); return renderHive(app); }
