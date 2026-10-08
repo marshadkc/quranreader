@@ -233,3 +233,20 @@ h1 small.note{font-size:14px;font-weight:400}
 .juzgrid button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
 .qlang{gap:6px}
 @media (max-width:520px){.juzgrid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+
+/* team race */
+.hex.num > span{background:var(--wax)}
+.hex .no{font-size:calc(var(--cw)*0.3);font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.hex.can{cursor:pointer;animation:glow 1.4s ease-in-out infinite}
+.hex.cana{background:var(--honey-deep)}.hex.canb{background:var(--part)}
+.hex.can .no{color:var(--ink)}
+.hex.wona{background:var(--honey-deep)}.hex.wona > span{background:var(--honey)}
+.hex.wonb{background:var(--part)}.hex.wonb > span{background:#8ea8f0}
+.hex.white{background:var(--line)}.hex.white > span{background:#fff;color:#555}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.team{border:2px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.team.ta{border-color:var(--honey-deep)}.team.tb{border-color:var(--part)}
+.team.now{box-shadow:0 0 0 3px var(--accent)}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.names input{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);margin-top:4px}
+@media (max-width:520px){.teams,.names{grid-template-columns:1fr}}
