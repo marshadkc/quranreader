@@ -3,7 +3,8 @@
 // honeycomb to the left edge. Cells are answered in reading order; right = honey, wrong = red.
 import { state, store, lv, withMeanings, CREDIT, ORDER, arN, esc, hasMeaning, meaningOf, addHoney } from "./app.js";
 
-const UNLOCK = 80; // % of Juz Amma words known before the game opens
+// The āyāt come from what you have practised ("Practise up to here" remembers how far, per sūrah),
+// or from all of Al-Fātiḥah and Juz ʿAmma.
 
 // ---------- geometry ----------
 function comb(R) {
@@ -52,24 +53,17 @@ export async function renderHive(app) {
   const loaded = await Promise.all(ORDER.map(withMeanings));
   const juz = loaded.filter((d) => d.n !== 1);
   const words = juz.flatMap((d) => d.ayahs.flatMap((a) => a.w));
-  const pool = juz.flatMap((d) => d.ayahs.filter((a) => a.w.every(hasMeaning)).map((a) => ({ s: d.n, name: d.en, a })));
-  const known = Math.round((words.filter((w) => lv(w.l) >= 3).length / words.length) * 100);
-  const preview = store.get("hivePreview", false);
-  if (!pool.length) {
+  const every = loaded.flatMap((d) => d.ayahs.filter((a) => a.w.every(hasMeaning)).map((a) => ({ s: d.n, name: d.en, a })));
+  const practised = every.filter((p) => p.a.n <= store.get("upto." + p.s, 0));
+  const scope = practised.length && store.get("hiveScope", "practised") === "practised" ? "practised" : "all";
+  const pool = scope === "practised" ? practised : every;
+  if (!every.length) {
     app.innerHTML = `<h1>Ayah Honeycomb</h1><div class="banner">The honeycomb needs word meanings, and they haven't loaded for Juz ʿAmma yet. They come from Quran.com and need an internet connection at least once a week.</div>`;
     app.onclick = null; return;
   }
-  if (known < UNLOCK && !preview) {
-    app.innerHTML = `<h1>Ayah Honeycomb</h1><section class="card locked">
-      <p>The honeycomb is the review game for the whole juz. It opens when you can read ${UNLOCK}% of Juz ʿAmma's words without help.</p>
-      <div class="track" style="width:100%"><div class="fill" style="width:${known}%"></div></div>
-      <p class="note">You're at ${known}%. Keep reading and practising each sūrah.</p>
-      <button class="btn" id="preview">Try it now anyway</button></section>`;
-    app.onclick = (e) => { if (e.target.id === "preview") { store.set("hivePreview", true); renderHive(app); } };
-    return;
-  }
   const distract = [...new Set(words.filter(hasMeaning).map((w) => w))];
-  if (!g) g = { mode: "pick", nums: [], done: new Set(), R: 2, path: [], res: [], active: null, combo: 0, gain: null, last: null, fresh: false };
+  if (g && g.scope !== scope) g = null;
+  if (!g) g = { scope, mode: "pick", nums: [], done: new Set(), R: 2, path: [], res: [], active: null, combo: 0, gain: null, last: null, fresh: false };
   const deal = () => { g.nums = [...pool].sort(() => Math.random() - 0.5).slice(0, 7); };
   if (!g.nums.length) deal();
 
@@ -125,6 +119,10 @@ export async function renderHive(app) {
     }
     app.innerHTML = `<h1>Ayah Honeycomb</h1>
       <p class="sub">Choose an āyah. Tap the glowing cell to see its word, then pick the meaning. Right answers fill with honey; wrong ones turn red.</p>
+      <div class="row"><div class="seg" aria-label="Which āyāt">
+        <button data-scope="practised" aria-pressed="${scope === "practised"}" ${practised.length && !busy ? "" : "disabled"}>Āyāt I've practised${practised.length ? ` (${practised.length})` : ""}</button>
+        <button data-scope="all" aria-pressed="${scope === "all"}" ${busy ? "disabled" : ""}>All of Juz ʿAmma</button></div></div>
+      ${practised.length ? "" : `<p class="note">Use "Practise up to here" in a sūrah, and the āyāt you practise will be collected here.</p>`}
       <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.s + ":" + p.a.n) ? " won" : ""}" data-p="${p.s}:${p.a.n}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span>${p.s}:${p.a.n}</span></button>`).join("")}</div>
       <div class="row" style="justify-content:center"><button class="btn" id="deal" ${busy ? "disabled" : ""}>New āyāt</button>${g.combo >= 2 ? `<span class="note">Streak ${g.combo}${g.combo >= 5 ? " · double honey" : ""}</span>` : ""}</div>
       <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
@@ -135,6 +133,7 @@ export async function renderHive(app) {
 
   app.onclick = (e) => {
     const t = e.target.closest("button"); if (!t || t.disabled) return;
+    if (t.dataset.scope) { store.set("hiveScope", t.dataset.scope); return renderHive(app); }
     if (t.dataset.p) return start(g.nums.find((p) => p.s + ":" + p.a.n === t.dataset.p));
     if (t.id === "deal") { deal(); return toPick(); }
     if (t.id === "back") return toPick();
