@@ -188,18 +188,21 @@ export async function renderHive(app) {
   const toPick = () => { Object.assign(g, { mode: "pick", cur: null, path: [], res: [], active: null, gain: null, last: null, R: 2 }); draw(); };
 
   // ---------- team race ----------
-  // Two teams, one screen, a numbered honeycomb with a hidden word in every cell. Teams take turns
-  // choosing a cell: a team starts on the right edge, then grows only from cells it already holds.
-  // A right answer claims the cell; a wrong one turns it white and hides a new word in it, so the cell
-  // stays free for either team and the missed word is not given away. The first team
-  // whose cells join the right edge to the left edge wins; a team in the way has to be gone around.
+  // Two teams, one screen, a numbered honeycomb with a hidden word in every cell. Team A builds from the
+  // right edge to the left, Team B from the left edge to the right. Teams take turns choosing a cell on
+  // their starting edge or touching their own cells. A right answer claims the cell; a wrong one turns
+  // it white and hides a new word in it, so the cell stays free and the missed word is not given away.
+  // No team may hold three cells in a straight row, so routes have to bend. A team may also try to steal
+  // an enemy cell touching its own, answering a fresh word for it, so no route is ever safe.
+  // The first team whose cells join its two edges wins.
   const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
   const names = () => store.get("teamNames", TEAMS.map((x) => x.name));
-  // A brick-wall board, W cells across and H rows, every other row shifted half a cell, so every route
-  // from the right edge to the left edge crosses all W columns.
-  const W = 7, H = 5;
-  const board0 = () => Array.from({ length: H * W }, (_, i) => { const row = Math.floor(i / W), col = i % W; return { k: row + "," + col, row, col, x: col + (row % 2) / 2, rightEnd: col === W - 1, leftEnd: col === 0 }; });
-  const near = (c) => { const d = c.row % 2 ? 0 : -1; return [[0, -1], [0, 1], [-1, d], [-1, d + 1], [1, d], [1, d + 1]].map(([dr, dc]) => c.row + dr + "," + (c.col + dc)); };
+  // A hexagon of 37 cells, seven across the middle row; each row's end cells make up the side edges.
+  const TR = 3;
+  const board0 = () => comb(TR).map((c) => ({ ...c, k: c.r + "," + c.q, row: c.r, col: c.q }));
+  const START = [(c) => c.rightEnd, (c) => c.leftEnd], GOAL = [START[1], START[0]];
+  const ROUTE = ["right → left", "left → right"], EDGE = ["the right edge", "the left edge"];
+  const near = (c) => [[0, -1], [0, 1], [-1, 0], [-1, 1], [1, 0], [1, -1]].map(([dr, dc]) => c.row + dr + "," + (c.col + dc));
   function match() {
     const cells = board0();
     // one word per cell: the chosen āyāt first (each base word once), then the rest of the sūrah or juz
@@ -212,63 +215,78 @@ export async function renderHive(app) {
     if (list.length < cells.length) return null;
     // numbered in rows from the top, right to left like the reading
     const order = [...cells].sort((a, b) => a.row - b.row || b.col - a.col);
+    const first = store.get("teamFirst", 0); store.set("teamFirst", 1 - first); // the first move helps, so the teams take it in turn
     const board = new Map(order.map((c, i) => [c.k, { c, no: i + 1, w: list[i], own: null, white: false }]));
-    return { srcKey, board, spare: list.slice(cells.length), ready: false, turn: 0, pick: null, opts: [], last: null, over: null, fresh: true,
+    return { srcKey, board, spare: list.slice(cells.length), ready: false, turn: first, pick: null, opts: [], last: null, over: null, fresh: true,
       teams: TEAMS.map((x, i) => ({ ...x, name: names()[i] || x.name, right: 0, missed: [] })) };
   }
-  // cells a team may choose: free right-edge cells, and free cells touching its own
-  const legal = (ti) => new Set([...t.board.values()].filter((x) => x.own === null && (x.c.rightEnd || near(x.c).some((k) => t.board.get(k)?.own === ti))).map((x) => x.c.k));
+  // would taking this cell give the team three of its cells side by side in one row?
+  const straight = (ti, c) => {
+    const mine = (col) => t.board.get(c.row + "," + col)?.own === ti;
+    let run = 1;
+    for (let col = c.col - 1; mine(col); col--) run++;
+    for (let col = c.col + 1; mine(col); col++) run++;
+    return run >= 3;
+  };
+  // cells a team may choose: free cells on its starting edge or touching its own, and enemy cells
+  // touching its own (a steal); never one that makes three in a row
+  const touches = (ti, c) => near(c).some((k) => t.board.get(k)?.own === ti);
+  const legal = (ti) => new Set([...t.board.values()].filter((x) => !straight(ti, x.c) &&
+    (x.own === null ? START[ti](x.c) || touches(ti, x.c) : x.own === 1 - ti && touches(ti, x.c))).map((x) => x.c.k));
   const joined = (ti) => { // do the team's cells link the right edge to the left edge?
-    const mine = [...t.board.values()].filter((x) => x.own === ti), seen = new Set(), stack = mine.filter((x) => x.c.rightEnd);
+    const mine = [...t.board.values()].filter((x) => x.own === ti), seen = new Set(), stack = mine.filter((x) => START[ti](x.c));
     stack.forEach((x) => seen.add(x.c.k));
-    while (stack.length) { const x = stack.pop(); if (x.c.leftEnd) return true; for (const k of near(x.c)) { const y = t.board.get(k); if (y && y.own === ti && !seen.has(k)) { seen.add(k); stack.push(y); } } }
+    while (stack.length) { const x = stack.pop(); if (GOAL[ti](x.c)) return true; for (const k of near(x.c)) { const y = t.board.get(k); if (y && y.own === ti && !seen.has(k)) { seen.add(k); stack.push(y); } } }
     return false;
   };
   function teams() {
     if (t && t.srcKey !== srcKey) t = null;
     if (!t) t = match();
     if (!t) {
-      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs 35 different words with meanings. Choose "Whole sūrah", or a bigger sūrah or juz.</div>${CREDIT}`;
+      app.innerHTML = `${head(false, "Two teams race across the honeycomb.")}<div class="banner">The team race needs 37 different words with meanings. Choose "Whole sūrah", or a bigger sūrah or juz.</div>${CREDIT}`;
       app.onclick = (e) => { const b = e.target.closest("button"); if (b && !b.disabled) { if (b.dataset.qlang) { setQuizLang(b); return; } common(b); } };
       return;
     }
     const tdraw = () => {
-      const { cw, h, sx, sy } = size((W - 0.5) / 2), playing = t.ready && !t.over, cur = t.teams[t.turn];
+      const { cw, h, sx, sy } = size(TR), playing = t.ready && !t.over, cur = t.teams[t.turn];
       const can = playing && t.pick === null ? legal(t.turn) : new Set();
       const cells = [...t.board.values()].map((x) => {
-        const c = x.c, left = c.x * sx, top = c.row * sy;
+        const c = x.c, left = (c.x + TR) * sx, top = (c.row + TR) * sy;
         let cls, inner, tag = "div", attrs = "", fs = cw * 0.3, delay = t.fresh ? `animation-delay:${x.no * 20}ms;` : "";
         const word = `<span class="ar">${esc(x.w.t)}</span>`;
-        if (x.own === 0 || x.own === 1) { cls = "won" + t.teams[x.own].cls; inner = word; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(x.w.t))); }
-        else if (t.pick === c.k) { cls = "active"; inner = word; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(x.w.t))); }
+        if (t.pick === c.k) { cls = "active"; inner = `<span class="ar">${esc(t.pickW.t)}</span>`; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(t.pickW.t))); }
+        else if (x.own !== null) {
+          cls = "won" + t.teams[x.own].cls; inner = word; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(x.w.t)));
+          if (can.has(c.k)) { cls += " steal"; tag = "button"; attrs = `data-tc="${c.k}" aria-label="Steal cell ${x.no}"`; }
+        }
         else { cls = "num" + (x.white ? " white" : "") + (can.has(c.k) ? " can can" + cur.cls : ""); inner = `<span class="no">${x.no}</span>`; if (can.has(c.k)) { tag = "button"; attrs = `data-tc="${c.k}" aria-label="Cell ${x.no}"`; } }
         if (t.fresh) cls += " appear";
         return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
       }).join("");
       t.fresh = false;
       const held = (ti) => [...t.board.values()].filter((x) => x.own === ti).length;
-      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)}</strong>
+      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)} <span class="note">${ROUTE[ti]}</span></strong>
           <span class="note">${held(ti)} cell${held(ti) === 1 ? "" : "s"} · ${tm.missed.length} wrong</span></div>`).join("");
-      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span> ${esc(t.last.who)} takes cell ${t.last.no}.` : `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}. Cell ${t.last.no} turns white and gets a new word.`}</div>` : "";
+      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span> ${esc(t.last.who)} ${t.last.steal ? "steals" : "takes"} cell ${t.last.no}.` : `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}. ${t.last.steal ? `Cell ${t.last.no} stays with ${esc(t.last.owner)}.` : `Cell ${t.last.no} turns white and gets a new word.`}`}</div>` : "";
       let panel;
       if (!t.ready) {
         panel = `<div><strong>Name the teams</strong></div><div class="names">${t.teams.map((tm, i) => `<label class="team t${tm.cls}">Team ${i + 1}<input id="tn${i}" maxlength="20" value="${esc(tm.name)}" autocomplete="off"></label>`).join("")}</div>
-          <div class="note">Each cell hides a word. Take turns choosing a numbered cell, starting on the right edge and growing from your own cells. Answer right to take the cell; a wrong answer turns it white with a new hidden word. First to join the right edge to the left edge wins.</div>
+          <div class="note">Each cell hides a word. ${esc(t.teams[0].name)} builds from the right edge to the left, ${esc(t.teams[1].name)} from the left edge to the right. Take turns choosing a numbered cell on your starting edge or touching your cells; answer right to take it, while a wrong answer turns it white with a new hidden word. You may not hold three cells side by side in one row. You may also steal a cell of the other team that touches yours by answering a new word for it. First to join both edges wins. ${esc(t.teams[t.turn].name)} goes first.</div>
           <button class="btn primary" id="tgo">Start the match</button>`;
       } else if (t.over) {
         const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
         panel = `${last}<h2 style="margin:4px 0">${t.over}</h2>${missed}<button class="btn honey" id="tnew">New match</button>`;
       } else if (t.pick === null) {
-        panel = `${last}<div>Turn: <strong>${esc(cur.name)}</strong></div><div class="note">Choose one of the glowing numbered cells${[...t.board.values()].some((x) => x.own === t.turn) ? ", on the right edge or touching your cells" : " on the right edge"}.</div>`;
+        panel = `${last}<div>Turn: <strong>${esc(cur.name)}</strong></div><div class="note">Choose a glowing cell${[...t.board.values()].some((x) => x.own === t.turn) ? `, on ${EDGE[t.turn]} or touching your cells, or steal a marked cell of the other team` : ` on ${EDGE[t.turn]}`}.</div>`;
       } else {
-        const x = t.board.get(t.pick), ur = lang() === "ur";
+        const x = { no: t.board.get(t.pick).no, w: t.pickW }, ur = lang() === "ur";
         panel = `<div class="note">${esc(cur.name)} · cell ${x.no}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(x.w.t)}</div><div>What does it mean?</div>
           <div class="opts">${t.opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}" data-to="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
       }
-      app.innerHTML = `${head(playing, "Two teams race from the right edge to the left. Choose a numbered cell, answer its word, and take it.")}
+      app.innerHTML = `${head(playing, "Two teams build opposite ways across the honeycomb. Choose a numbered cell, answer its word, and take it, or steal one.")}
         <div class="teams">${score}</div>
         <div class="row" style="justify-content:center"><button class="btn" id="tnew">${t.over ? "Play again" : "New match"}</button></div>
-        <div class="comb" id="comb" style="--cw:${cw}px;width:${(W + 0.5) * sx - 3}px;height:${(H - 1) * sy + h}px">${cells}</div>
+        <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * TR + 1) * sx - 3}px;height:${2 * TR * sy + h}px">${cells}</div>
         <section class="card quiz">${panel}</section>${CREDIT}`;
     };
     const nextTurn = () => {
@@ -286,15 +304,17 @@ export async function renderHive(app) {
         return tdraw();
       }
       if (b.dataset.tc && t.pick === null && !t.over) {
-        const w = t.board.get(b.dataset.tc).w;
-        t.pick = b.dataset.tc; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null;
+        const x = t.board.get(b.dataset.tc);
+        // a steal is asked with a fresh word: the cell's own word is already showing
+        const w = x.own === null ? x.w : t.spare.pop() || distract[Math.floor(Math.random() * distract.length)];
+        t.pick = b.dataset.tc; t.pickW = w; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null;
         return tdraw();
       }
       if (b.dataset.to !== undefined && t.pick !== null) {
-        const cur = t.teams[t.turn], x = t.board.get(t.pick), ok = t.opts[+b.dataset.to] === x.w;
-        t.pick = null; t.last = { ok, w: x.w, no: x.no, who: cur.name };
-        if (ok) { x.own = t.turn; cur.right++; }
-        else { cur.missed.push(x.w); x.white = true; x.w = t.spare.pop() || distract[Math.floor(Math.random() * distract.length)]; }
+        const cur = t.teams[t.turn], x = t.board.get(t.pick), w = t.pickW, ok = t.opts[+b.dataset.to] === w, steal = x.own !== null;
+        t.pick = null; t.last = { ok, w, no: x.no, who: cur.name, steal, owner: steal ? t.teams[x.own].name : "" };
+        if (ok) { x.own = t.turn; x.w = w; cur.right++; }
+        else { cur.missed.push(w); if (!steal) { x.white = true; x.w = t.spare.pop() || distract[Math.floor(Math.random() * distract.length)]; } }
         if (ok && joined(t.turn)) t.over = `Winner: ${esc(cur.name)}`;
         else nextTurn();
         return tdraw();

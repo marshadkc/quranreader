@@ -250,3 +250,4 @@ h1 small.note{font-size:14px;font-weight:400}
 .names{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
 .names input{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);margin-top:4px}
 @media (max-width:520px){.teams,.names{grid-template-columns:1fr}}
+.hex.steal{cursor:pointer;background:var(--bad);animation:glow 1.4s ease-in-out infinite}
