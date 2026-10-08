@@ -82,12 +82,20 @@ function walk(n, R, lo = -R, hi = R, corner = false) {
   }
   return null;
 }
-// Team race: two rivers of n cells, one in the top half dipping towards the middle and one in the bottom
-// half rising towards it. They come close in the middle but never share a cell.
+// Team race: two rivers that cross at exactly one cell. Team A's runs from the top right to the bottom
+// left; Team B's is its mirror image, from the bottom right to the top left. Every step of a river moves
+// left, so no two of its cells share a column position, and the mirror meets it only where it crosses the
+// middle row. A river that crosses the middle row once gives one shared cell, at the same word in both.
 function layout2(n) {
-  for (let R = Math.max(2, radiusFor(n)); R <= 7; R++) {
-    const a = walk(n, R, -R, -1, true), b = a && walk(n, R, 1, R, true);
-    if (b) return { R, paths: [a, b] };
+  for (let R = Math.max(1, radiusFor(n)); R <= 7; R++) {
+    for (let k = 0; k < 60; k++) {
+      const a = walk(n, R, -R, R, true);
+      if (!a) break;
+      const rows = a.map((key) => +key.split(",")[1]);
+      if (rows[0] >= 0 || rows[rows.length - 1] <= 0 || rows.filter((r) => r === 0).length !== 1) continue;
+      const b = a.map((key) => { const [q, r] = key.split(",").map(Number); return q + r + "," + -r; });
+      return { R, paths: [a, b], cross: rows.indexOf(0) };
+    }
   }
   return null;
 }
@@ -199,27 +207,29 @@ export async function renderHive(app) {
 
   // ---------- team race ----------
   // Two teams, one screen. Each team gets its own āyah with the same number of words, laid on its own
-  // river: Team A in the top half, Team B in the bottom half. Teams take turns, one word per turn.
+  // river; the two rivers cross at one shared cell. Teams take turns, one word per turn.
   // A right answer fills the cell; a wrong one turns it white and the team sits out its next turn.
   // The first team to reach the left edge wins; if both get there in the same round, the one with more
   // right answers wins, else it is a draw.
   const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
+  const names = () => store.get("teamNames", TEAMS.map((x) => x.name));
+  const fits = (n) => n >= 3 && n !== 4; // a 4-cell river can't cross the middle row once and mirror
   function match() {
     const ok = pool.filter((p) => p.a.w.length >= 3);
     if (ok.length < 2) return null;
     const byLen = new Map();
     for (const p of ok) { const n = p.a.w.length; if (!byLen.has(n)) byLen.set(n, []); byLen.get(n).push(p); }
-    const same = [...byLen.values()].filter((l) => l.length >= 2);
+    const same = [...byLen.entries()].filter(([n, l]) => fits(n) && l.length >= 2).map(([, l]) => l);
     let pair, n;
     if (same.length) { const l = same[Math.floor(Math.random() * same.length)]; pair = [...l].sort(() => Math.random() - 0.5).slice(0, 2); n = pair[0].a.w.length; }
     else { // no two āyāt of the same length: play the same number of words from the start of each
-      pair = [...ok].sort(() => Math.random() - 0.5).slice(0, 2); n = Math.min(...pair.map((p) => p.a.w.length));
+      pair = [...ok].sort(() => Math.random() - 0.5).slice(0, 2); n = Math.min(...pair.map((p) => p.a.w.length)); if (!fits(n)) n = 3;
       pair = pair.map((p) => (p.a.w.length === n ? p : { ...p, label: `${p.label} · words 1–${n}`, a: { ...p.a, w: p.a.w.slice(0, n) } }));
     }
     const L = layout2(n);
     if (!L) return null;
-    return { srcKey, R: L.R, n, turn: 0, active: null, opts: [], note: "", last: null, over: null, fresh: true,
-      teams: pair.map((p, i) => ({ ...TEAMS[i], unit: p, path: L.paths[i], res: p.a.w.map(() => null), pos: 0, turns: 0, skip: false, missed: [] })) };
+    return { srcKey, R: L.R, n, cross: L.cross, crossBy: null, ready: false, turn: 0, active: null, opts: [], note: "", last: null, over: null, fresh: true,
+      teams: pair.map((p, i) => ({ ...TEAMS[i], name: names()[i] || TEAMS[i].name, unit: p, path: L.paths[i], res: p.a.w.map(() => null), pos: 0, turns: 0, skip: false, missed: [] })) };
   }
   function teams() {
     if (t && t.srcKey !== srcKey) t = null;
@@ -231,43 +241,52 @@ export async function renderHive(app) {
     }
     const tdraw = () => {
       const { cw, h, sx, sy } = size(t.R), R = t.R, at = new Map();
-      t.teams.forEach((tm, ti) => tm.path.forEach((k, i) => at.set(k, [ti, i])));
-      const playing = !t.over, cur = t.teams[t.turn];
+      t.teams.forEach((tm, ti) => tm.path.forEach((k, i) => { if (!at.has(k)) at.set(k, []); at.get(k).push([ti, i]); }));
+      const playing = !t.over && t.ready, cur = t.teams[t.turn];
+      // each river's first cell carries its team's initial (A and B if the names start alike)
+      const ini = t.teams.map((tm) => tm.name.trim().slice(0, 1).toUpperCase()), tags = ini[0] && ini[0] !== ini[1] ? ini : ["A", "B"];
+      const FILL = { wona: "var(--honey)", wonb: "#8ea8f0", white: "#fff", patha: "#f6dfae", pathb: "var(--part-soft)" };
+      const look = (ti, i) => { const tm = t.teams[ti], res = tm.res[i]; return res === "right" ? "won" + tm.cls : res === "wrong" ? "white" : "path" + tm.cls; };
       const cells = comb(R).map((c) => {
         const left = (c.x + R) * sx, top = (c.r + R) * sy;
-        let cls = "", inner = "", fs = cw * 0.3, tag = "div", attrs = "", delay = "";
+        let cls = "", inner = "", fs = cw * 0.3, tag = "div", attrs = "", delay = "", style = "";
         if (at.has(c.k)) {
-          const [ti, i] = at.get(c.k), tm = t.teams[ti], res = tm.res[i], tx = tm.unit.a.w[i].t;
+          const own = at.get(c.k), mine = own.find(([ti, i]) => playing && ti === t.turn && i === cur.pos);
+          // the shared cell shows whoever is on it now, else whoever answered it last
+          const [ti, i] = mine || own.find(([x]) => x === t.crossBy) || own[0], tm = t.teams[ti], res = tm.res[i], tx = tm.unit.a.w[i].t;
           fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(tx)));
-          if (res === "right") { cls = "won" + tm.cls; inner = `<span class="ar">${esc(tx)}</span>`; }
-          else if (res === "wrong") { cls = "white"; inner = `<span class="ar">${esc(tx)}</span>`; }
-          else if (playing && ti === t.turn && i === tm.pos && t.active !== null) { cls = "active"; inner = `<span class="ar">${esc(tx)}</span>`; }
-          else if (playing && ti === t.turn && i === tm.pos) { cls = "path" + tm.cls + " next"; tag = "button"; attrs = `data-tcell="1" aria-label="${tm.name}: reveal word ${i + 1} of ${t.n}"`; }
-          else cls = "path" + tm.cls;
-          if (i === 0 && !res && !(playing && ti === t.turn && t.active !== null)) inner = `<span class="tag">${tm.name.slice(-1)}</span>`;
+          const word = `<span class="ar">${esc(tx)}</span>`;
+          if (mine && t.active !== null) { cls = "active"; inner = word; }
+          else if (mine) { cls = look(ti, i) + " next"; tag = "button"; attrs = `data-tcell="1" aria-label="${esc(tm.name)}: reveal word ${i + 1} of ${t.n}"`; }
+          else { cls = look(ti, i); if (res) inner = word; }
+          if (own.length > 1) { cls += " cross"; style = `--ca:${FILL[look(0, t.cross)]};--cb:${FILL[look(1, t.cross)]};`; }
+          if (i === 0 && !res && !(mine && t.active !== null)) inner = `<span class="tag">${esc(tags[ti])}</span>`;
           if (t.fresh) { cls += " appear"; delay = `animation-delay:${i * 60}ms;`; }
         }
-        return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
+        return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${style}${delay}"><span>${inner}</span></${tag}>`;
       }).join("");
       t.fresh = false;
-      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${tm.name}</strong> <span dir="ltr">${esc(tm.unit.name)} ${esc(tm.unit.label)}</span>
+      const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)}</strong> <span dir="ltr">${esc(tm.unit.name)} ${esc(tm.unit.label)}</span>
           <span class="note">${tm.res.filter((x) => x === "right").length} right · ${tm.pos} of ${t.n} cells${tm.skip ? " · sits out next turn" : ""}</span></div>`).join("");
       const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span>` : `<span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}.${t.last.who ? ` ${esc(t.last.who)} sits out the next turn.` : ""}`}</div>` : "";
       let panel;
-      if (t.over) {
-        const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${tm.name}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
+      if (!t.ready) {
+        panel = `<div><strong>Name the teams</strong></div><div class="names">${t.teams.map((tm, i) => `<label class="team t${tm.cls}">Team ${i + 1}<input id="tn${i}" maxlength="20" value="${esc(tm.name)}" autocomplete="off"></label>`).join("")}</div>
+          <div class="note">Each team gets its own āyah of ${t.n} words. The two paths cross at one cell in the middle.</div><button class="btn primary" id="tgo">Start the match</button>`;
+      } else if (t.over) {
+        const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
         panel = `${last}<h2 style="margin:4px 0">${t.over}</h2>${missed}<button class="btn honey" id="tnew">New match</button>`;
       } else if (t.active === null) {
-        panel = `${last}${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}<div><strong>${cur.name}'s turn</strong> · word ${cur.pos + 1} of ${t.n}</div><div class="note">Tap ${cur.name}'s glowing cell to reveal the word.</div>`;
+        panel = `${last}${t.note ? `<div class="note">${esc(t.note)}</div>` : ""}<div>Turn: <strong>${esc(cur.name)}</strong> · word ${cur.pos + 1} of ${t.n}</div><div class="note">Tap the glowing cell to reveal the word.</div>`;
       } else {
         const w = cur.unit.a.w[cur.pos], ur = lang() === "ur";
-        panel = `<div class="note">${cur.name} · word ${cur.pos + 1} of ${t.n}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
+        panel = `<div class="note">${esc(cur.name)} · word ${cur.pos + 1} of ${t.n}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
           <div class="opts">${t.opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}" data-to="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
       }
-      const busy = playing && (t.active !== null || t.teams.some((tm) => tm.pos > 0));
+      const busy = !t.over && t.ready;
       app.innerHTML = `${head(busy, "Two teams race across the honeycomb, one word per turn. A wrong answer turns the cell white and costs the next turn.")}
         <div class="teams">${score}</div>
-        <div class="row" style="justify-content:center"><button class="btn" id="tnew">${playing ? "New match" : "Play again"}</button></div>
+        <div class="row" style="justify-content:center"><button class="btn" id="tnew">${t.over ? "Play again" : "New match"}</button></div>
         <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
         <section class="card quiz">${panel}</section>${CREDIT}`;
     };
@@ -278,7 +297,7 @@ export async function renderHive(app) {
       // both through in the same round: more right answers wins
       const right = (tm) => tm.res.filter((x) => x === "right").length;
       const win = done.length === 1 ? done[0] : right(a) === right(b) ? null : right(a) > right(b) ? a : b;
-      t.over = win ? `${win.name} wins!${done.length === 2 ? " (both finished; more right answers)" : ""}` : "It's a draw!";
+      t.over = win ? `Winner: ${esc(win.name)}${done.length === 2 ? " (both finished; more right answers)" : ""}` : "It's a draw!";
       return true;
     };
     const advance = () => {
@@ -298,6 +317,11 @@ export async function renderHive(app) {
       if (b.dataset.qlang) { setQuizLang(b); return tdraw(); }
       if (common(b)) return;
       if (b.id === "tnew") { t = match(); return tdraw(); }
+      if (b.id === "tgo") {
+        const ns = t.teams.map((tm, i) => (app.querySelector("#tn" + i).value || "").trim() || TEAMS[i].name);
+        store.set("teamNames", ns); t.teams.forEach((tm, i) => { tm.name = ns[i]; }); t.ready = true;
+        return tdraw();
+      }
       if (b.dataset.tcell && t.active === null && !t.over) {
         const cur = t.teams[t.turn], w = cur.unit.a.w[cur.pos];
         t.active = cur.pos; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null;
@@ -305,6 +329,7 @@ export async function renderHive(app) {
       }
       if (b.dataset.to !== undefined && t.active !== null) {
         const cur = t.teams[t.turn], w = cur.unit.a.w[cur.pos], ok = t.opts[+b.dataset.to] === w;
+        if (cur.pos === t.cross) t.crossBy = t.turn;
         cur.res[cur.pos] = ok ? "right" : "wrong"; cur.pos++; t.active = null;
         if (!ok) { cur.missed.push(w); cur.skip = cur.pos < t.n; }
         t.last = { ok, w, who: cur.name };
