@@ -1,5 +1,5 @@
 // Offline support: the app shell is cached on install; data and fonts are cached as they are used.
-const VERSION = "qwr-v15";
+const VERSION = "qwr-v16";
 const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/hive.js", "manifest.webmanifest", "data/surahs.json", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
