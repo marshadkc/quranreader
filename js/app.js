@@ -155,7 +155,10 @@ function wordHTML(w, k, idx) {
     <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
 }
 const anyUrdu = (ws) => ws.some((w) => w.ur);
-function versesHTML(ayahs, idx) {
+// "Practise up to here": a round from the āyah after the last one practised (or from 1 when reviewing) to this one
+const upto = (n) => store.get("upto." + n, 0);
+const practiseLink = (n, a) => { const f = upto(n) < a ? upto(n) + 1 : 1; return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}` : `āyāt ${f}–${a}`}</a>`; };
+function versesHTML(ayahs, idx, practiseIn) {
   let k = 0;
   const lang = anyUrdu(ayahs.flatMap((a) => a.w)) ? state.lang : "en"; // no Urdu meanings yet: show the English
   return `<div class="verses ${lang === "en" ? "only-en" : lang === "ur" ? "only-ur" : ""}" id="verses">
@@ -164,6 +167,7 @@ function versesHTML(ayahs, idx) {
       return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
         <span class="vn">﴿${arN(a.n)}﴾</span></div>
         ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
+        ${practiseIn && a.w.some(hasMeaning) ? practiseLink(practiseIn, a.n) : ""}
       </article>`;
     }).join("")}</div><div id="sheetbox"></div>`;
 }
@@ -270,7 +274,7 @@ async function reader(n, focus) {
     <div class="row">${langHTML(ws)}
       ${ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
     ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
-    ${versesHTML(d.ayahs, idx)}
+    ${versesHTML(d.ayahs, idx, n)}
     ${fromQuranCom(d) ? CREDIT : ""}`;
   prog();
   app.onclick = (e) => readingClick(e, idx);
@@ -443,13 +447,15 @@ async function wordSearch(raw, pick) {
 // Practice: pick the āyāt and how many words, then a fixed-length round that can be left at any time.
 // Each base word comes up once (weakest and most frequent first); a missed word comes back once at the end.
 const LENGTHS = [10, 20, 0]; // 0 = every word in the chosen āyāt
-async function practise(n) {
+async function practise(n, range) {
   const d = await withMeanings(n), all = allWords(d).filter(hasMeaning);
   if (!all.length) { app.innerHTML = `<div class="banner">This sūrah's word meanings haven't loaded, so there is nothing to practise yet.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
   const lang = state.lang === "ur" && anyUrdu(all) ? "ur" : "en";
   const last = d.ayahs.length;
   const saved = store.get("prac." + n, null);
   const opt = saved || { from: 1, to: Math.min(last, 5), len: 10 };
+  const m = /^(\d+)-(\d+)$/.exec(range || "");
+  if (m) Object.assign(opt, { from: +m[1], to: +m[2], len: 0 }); // from "Practise up to here": every word in those āyāt
   opt.from = Math.min(Math.max(1, opt.from), last); opt.to = Math.min(Math.max(opt.from, opt.to), last);
 
   const setup = () => {
@@ -462,6 +468,7 @@ async function practise(n) {
           <button class="btn" id="pall">Whole sūrah</button></div>
         <div class="row"><span>Words</span><div class="seg" aria-label="How many words">${LENGTHS.map((l) => `<button data-len="${l}" aria-pressed="${opt.len === l}">${l || "All"}</button>`).join("")}</div></div>
         <p class="note" id="pcount"></p>
+        ${upto(n) ? `<p class="note">"Practise up to here" in the reader continues after āyah ${upto(n)}, where your last round ended. <button class="btn small" id="preset">Start over from āyah 1</button></p>` : ""}
         <button class="btn primary" id="pgo">Start</button>
       </section>`;
     count();
@@ -475,6 +482,7 @@ async function practise(n) {
   const setupClick = (e) => {
       const lb = e.target.closest("[data-len]");
       if (lb) { opt.len = +lb.dataset.len; app.querySelectorAll("[data-len]").forEach((b) => b.setAttribute("aria-pressed", b === lb)); return count(); }
+      if (e.target.id === "preset") { store.set("upto." + n, 0); return setup(); }
       if (e.target.id === "pall") { $("#pf").value = 1; $("#pt").value = last; return count(); }
       if (e.target.id === "pgo") {
         let f = Math.min(Math.max(1, +$("#pf").value || 1), last), to = Math.min(Math.max(1, +$("#pt").value || f), last);
@@ -520,17 +528,18 @@ async function practise(n) {
   };
   const summary = (quit) => {
     const asked = r.answered, missed = r.missed;
+    if (asked) store.set("upto." + n, Math.max(upto(n), opt.to));
     app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
       <section class="card quiz">
         <h2>${quit ? "Round stopped" : "Round complete"}</h2>
         <div class="big-score">${r.right} of ${asked}</div>
         <div class="note">right on the first try · āyāt ${opt.from}–${opt.to}${r.honey ? ` · <span class="pts">+${r.honey} honey</span>` : ""}</div>
         ${missed.length ? `<div class="missed"><div class="note">Words to look at again</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span class="${lang === "ur" ? "ur" : ""}">${esc(meaningOf(w, lang))}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
-        <div class="btns"><button class="btn primary" id="again">Practise again</button><button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
+        <div class="btns"><button class="btn primary" id="again">Practise again</button>${opt.from > 1 ? `<a class="btn" href="#/s/${n}/practise/1-${opt.to}" id="widen">Review āyāt 1–${opt.to}</a>` : ""}<button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
       </section>`;
   };
   app.onsubmit = (e) => e.preventDefault();
-  setup();
+  if (m) start(); else setup();
   app.onclick = (e) => {
     if (!r) return setupClick(e);
     if (e.target.id === "quit") return summary(true);
@@ -597,7 +606,7 @@ async function route() {
   let anchored = false;
   try {
     if (h[0] === "s" && h[1]) {
-      if (h[2] === "practise") await practise(+h[1]); else anchored = await reader(+h[1], +h[2] || 0);
+      if (h[2] === "practise") await practise(+h[1], h[3]); else anchored = await reader(+h[1], +h[2] || 0);
     } else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();

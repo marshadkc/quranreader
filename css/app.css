@@ -223,3 +223,5 @@ h1 small.note{font-size:14px;font-weight:400}
 .mrow{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:6px}
 .mrow .ar{font-size:24px}
 .quiz .btns{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.btn.small{font-size:13px;padding:5px 10px}
+.practise-here{align-self:flex-start}
