@@ -122,6 +122,9 @@ h2{margin:0;font-size:18px;font-weight:600}
 .meaning{border-top:1px dashed var(--line);padding-top:8px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:2px;transition:opacity .35s}
 .meaning.faded{opacity:.15}
 .only-en .ur,.only-ur .en{display:none}
+.no-meaning .gl,.no-meaning .meaning{opacity:0}
+.no-meaning .meaning{cursor:pointer}
+.no-meaning .w.peek .gl,.no-meaning .meaning.peek{opacity:1}
 .sheet{max-height:62vh;overflow:auto;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 6px 20px rgba(0,0,0,.08)}
 .sheet .top2{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .sheet .big{font-size:40px;line-height:1.6}
