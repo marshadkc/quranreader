@@ -204,9 +204,9 @@ const BOOKS = { l: ["lisan", "Ibn Manẓūr, Lisān al-ʿArab"], m: ["maqayees",
 function coreHTML(c, r) {
   if (!c) return "";
   const gist = ["en", "ur"].filter((l) => c[l] && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !c.ur)))
-    .map((l) => `<div class="${l === "ur" ? "ur" : ""}"><strong>${esc(c[l])}</strong></div>`).join("");
+    .map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(c.ur)}</div>` : `<div><strong>${esc(c.en)}</strong></div>`).join("");
   const quotes = (c.q || []).map(([k, t, form]) =>
-    `<div class="q"><span class="ar">«${esc(t)}»</span> <a class="note" href="https://tafsir.app/${BOOKS[k][0]}/${encodeURIComponent(form)}" target="_blank" rel="noopener">${BOOKS[k][1]}</a></div>`).join("");
+    `<div class="q"><span class="ar" dir="rtl">${esc(t)}</span> <a class="note" href="https://tafsir.app/${BOOKS[k][0]}/${encodeURIComponent(form)}" target="_blank" rel="noopener">${BOOKS[k][1]}</a></div>`).join("");
   const root = encodeURIComponent(c.q?.[0]?.[2] || "");
   return `<div class="eyebrow">Root meaning</div>${gist}${quotes}
     <div class="note">More: <a href="https://tafsir.app/ishtiqaqi/${root || encodeURIComponent(r)}" target="_blank" rel="noopener">al-Muʿjam al-Ishtiqāqī</a> · <a href="https://tafsir.app/lisan/${root || encodeURIComponent(r)}" target="_blank" rel="noopener">full entries on tafsir.app</a></div>`;
