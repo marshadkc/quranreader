@@ -201,15 +201,15 @@ const langHTML = (ws) => `<div class="seg" aria-label="Meaning language">
 
 // Root meaning: a short line in the reader's language where one is approved, then the dictionaries' own words
 const BOOKS = { l: ["lisan", "Ibn Manẓūr, Lisān al-ʿArab"], m: ["maqayees", "Ibn Fāris, Maqāyīs al-Lugha"], r: ["mufradat-ragheb", "al-Rāghib, al-Mufradāt"] };
-function coreHTML(c) {
+function coreHTML(c, r) {
   if (!c) return "";
-  const gist = ["en", "ur"].filter((l) => c[l] && (state.lang === "both" || state.lang === l || (l === "en" && !c.ur)))
+  const gist = ["en", "ur"].filter((l) => c[l] && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !c.ur)))
     .map((l) => `<div class="${l === "ur" ? "ur" : ""}"><strong>${esc(c[l])}</strong></div>`).join("");
-  const quotes = Object.entries(BOOKS).filter(([k]) => c[k]).map(([k, [slug, name]]) =>
-    `<div class="q"><span class="ar">«${esc(c[k])}»</span> <a class="note" href="https://tafsir.app/${slug}/${encodeURIComponent(c[k + "w"])}" target="_blank" rel="noopener">${name}</a></div>`).join("");
-  const root = encodeURIComponent(c.lw || c.mw || c.rw);
+  const quotes = (c.q || []).map(([k, t, form]) =>
+    `<div class="q"><span class="ar">«${esc(t)}»</span> <a class="note" href="https://tafsir.app/${BOOKS[k][0]}/${encodeURIComponent(form)}" target="_blank" rel="noopener">${BOOKS[k][1]}</a></div>`).join("");
+  const root = encodeURIComponent(c.q?.[0]?.[2] || "");
   return `<div class="eyebrow">Root meaning</div>${gist}${quotes}
-    <div class="note">More: <a href="https://tafsir.app/ishtiqaqi/${root}" target="_blank" rel="noopener">al-Muʿjam al-Ishtiqāqī</a> · <a href="https://tafsir.app/lisan/${root}" target="_blank" rel="noopener">full entries on tafsir.app</a></div>`;
+    <div class="note">More: <a href="https://tafsir.app/ishtiqaqi/${root || encodeURIComponent(r)}" target="_blank" rel="noopener">al-Muʿjam al-Ishtiqāqī</a> · <a href="https://tafsir.app/lisan/${root || encodeURIComponent(r)}" target="_blank" rel="noopener">full entries on tafsir.app</a></div>`;
 }
 function sheetHTML(w, idx) {
   const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
@@ -252,7 +252,7 @@ function readingClick(e, idx) {
     view.sel = k;
     $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
     const box = $("#sheetbox .core");
-    if (box) core().then((d) => { if (box.isConnected) box.innerHTML = coreHTML(d[box.dataset.root]); });
+    if (box) core().then((d) => { if (box.isConnected) box.innerHTML = coreHTML(d[box.dataset.root], box.dataset.root); });
   };
   const act = e.target.closest("[data-act]");
   if (act) {
