@@ -91,7 +91,7 @@ export async function withMeanings(n) {
 }
 const fromQuranCom = (d) => d.ayahs.some((a) => a.w.some(hasMeaning));
 
-export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 114 - i)]; // the course: Al-Fatihah, then An-Nas back to An-Naba
+export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 78 + i)]; // the course: Al-Fatihah, then An-Naba to An-Nas in the order of the Quran
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 export const arHTML = (w) => w.p.map(([t, k]) => (k === "s" ? esc(t) : `<span class="${k}">${esc(t)}</span>`)).join("");
