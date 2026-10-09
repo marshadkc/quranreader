@@ -13,7 +13,7 @@ export const store = {
 };
 
 export const state = {
-  lang: store.get("lang", "both"),     // both | en | ur
+  lang: store.get("lang", "both"),     // both | en | ur | none (meanings hidden, to test yourself)
   level: store.get("level", {}),       // lemma -> 0 new, 1 learning, 2 almost, 3 known
   honey: store.get("honey", 0),
   combo: 0,
@@ -180,8 +180,7 @@ const upto = (n) => store.get("upto." + n, 0);
 const practiseLink = (n, a) => { const f = upto(n) < a ? upto(n) + 1 : 1; return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}` : `āyāt ${f}–${a}`}</a>`; };
 function versesHTML(ayahs, idx, practiseIn) {
   let k = 0;
-  const lang = anyUrdu(ayahs.flatMap((a) => a.w)) ? state.lang : "en"; // no Urdu meanings yet: show the English
-  return `<div class="verses ${lang === "en" ? "only-en" : lang === "ur" ? "only-ur" : ""}" id="verses">
+  return `<div class="verses${versesClass(ayahs.flatMap((a) => a.w))}" id="verses">
     ${ayahs.map((a) => {
       const faded = a.w.every((w) => lv(w.l) >= 2);
       return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
@@ -191,10 +190,12 @@ function versesHTML(ayahs, idx, practiseIn) {
       </article>`;
     }).join("")}</div><div id="sheetbox"></div>`;
 }
-const langHTML = (ws) => !anyUrdu(ws) ? "" : `<div class="seg" aria-label="Meaning language">
-  <button data-lang="both" aria-pressed="${state.lang === "both"}">Both</button>
-  <button data-lang="en" aria-pressed="${state.lang === "en"}">English</button>
-  <button data-lang="ur" aria-pressed="${state.lang === "ur"}">اردو</button></div>`;
+// The meanings shown: with no Urdu meanings yet, English or none
+const readLang = (ws) => (anyUrdu(ws) || state.lang === "none" ? state.lang : "en");
+const versesClass = (ws) => ({ en: " only-en", ur: " only-ur", none: " no-meaning" })[readLang(ws)] || "";
+const langHTML = (ws) => `<div class="seg" aria-label="Meaning language">
+  ${(anyUrdu(ws) ? [["both", "Both"], ["en", "English"], ["ur", "اردو"], ["none", "None"]] : [["en", "English"], ["none", "None"]])
+    .map(([l, t]) => `<button data-lang="${l}" aria-pressed="${readLang(ws) === l}">${t}</button>`).join("")}</div>`;
 
 function sheetHTML(w, idx) {
   const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
@@ -222,9 +223,14 @@ function readingClick(e, idx) {
   if (lb) {
     state.lang = lb.dataset.lang; store.set("lang", state.lang);
     document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === state.lang));
-    $("#verses").className = "verses" + (state.lang === "en" ? " only-en" : state.lang === "ur" ? " only-ur" : "");
+    $("#verses").className = "verses" + versesClass(view.ws);
+    app.querySelectorAll(".peek").forEach((x) => x.classList.remove("peek"));
     return;
   }
+  // Meanings hidden: the first tap on a word, or on an āyah's translation, shows just that one
+  const hidden = $("#verses").classList.contains("no-meaning");
+  const m = e.target.closest(".meaning");
+  if (hidden && m) { m.classList.toggle("peek"); return; }
   const btns = () => app.querySelectorAll(".w");
   const select = (k) => {
     btns().forEach((b) => b.classList.toggle("sel", +b.dataset.k === k));
@@ -244,6 +250,7 @@ function readingClick(e, idx) {
   }
   const b = e.target.closest(".w"); if (!b) return;
   const k = +b.dataset.k, w = view.ws[k];
+  if (hidden && !b.classList.contains("peek")) { b.classList.add("peek"); return; }
   if (hasMeaning(w) && lv(w.l) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w.l, 2); return; }
   select(k);
 }
