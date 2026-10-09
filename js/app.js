@@ -24,13 +24,15 @@ export function addHoney(n) { state.honey += n; store.set("honey", state.honey);
 const LABEL = ["new", "learning", "almost", "known"];
 
 // ---------- data ----------
-let INDEX = null, ROOTS = null, FORMS = null;
+let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
 const SURAH = new Map();
 const json = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); };
 export async function index() {
   if (!INDEX) INDEX = await json("data/surahs.json");
   return INDEX;
 }
+// The core meaning of each root, quoted from the classical dictionaries (loaded when a word card first opens)
+const core = () => (CORE ||= json("data/core.json").catch(() => { CORE = null; return {}; }));
 export async function surah(n) {
   if (!SURAH.has(n)) {
     const d = await json(`data/s/${String(n).padStart(3, "0")}.json`);
@@ -197,6 +199,18 @@ const langHTML = (ws) => `<div class="seg" aria-label="Meaning language">
   ${(anyUrdu(ws) ? [["both", "Both"], ["en", "English"], ["ur", "اردو"], ["none", "None"]] : [["en", "English"], ["none", "None"]])
     .map(([l, t]) => `<button data-lang="${l}" aria-pressed="${readLang(ws) === l}">${t}</button>`).join("")}</div>`;
 
+// Root meaning: a short line in the reader's language where one is approved, then the dictionaries' own words
+const BOOKS = { l: ["lisan", "Ibn Manẓūr, Lisān al-ʿArab"], m: ["maqayees", "Ibn Fāris, Maqāyīs al-Lugha"], r: ["mufradat-ragheb", "al-Rāghib, al-Mufradāt"] };
+function coreHTML(c) {
+  if (!c) return "";
+  const gist = ["en", "ur"].filter((l) => c[l] && (state.lang === "both" || state.lang === l || (l === "en" && !c.ur)))
+    .map((l) => `<div class="${l === "ur" ? "ur" : ""}"><strong>${esc(c[l])}</strong></div>`).join("");
+  const quotes = Object.entries(BOOKS).filter(([k]) => c[k]).map(([k, [slug, name]]) =>
+    `<div class="q"><span class="ar">«${esc(c[k])}»</span> <a class="note" href="https://tafsir.app/${slug}/${encodeURIComponent(c[k + "w"])}" target="_blank" rel="noopener">${name}</a></div>`).join("");
+  const root = encodeURIComponent(c.lw || c.mw || c.rw);
+  return `<div class="eyebrow">Root meaning</div>${gist}${quotes}
+    <div class="note">More: <a href="https://tafsir.app/ishtiqaqi/${root}" target="_blank" rel="noopener">al-Muʿjam al-Ishtiqāqī</a> · <a href="https://tafsir.app/lisan/${root}" target="_blank" rel="noopener">full entries on tafsir.app</a></div>`;
+}
 function sheetHTML(w, idx) {
   const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
     const g = idx.parts[key] || {};
@@ -211,6 +225,7 @@ function sheetHTML(w, idx) {
     <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
       <dt>Base word</dt><dd><span class="ar" style="font-size:22px">${esc(w.l)}</span> <span class="note">· ${w.f} times in the Quran</span></dd>
       <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc(spaced(w.r))}</span>` : "None"}
+      ${w.r ? `<div class="core" data-root="${esc(w.r)}"></div>` : ""}
       ${fam.length ? `<div class="note">Same root here: <span class="ar" style="font-size:20px">${fam.map(esc).join("، ")}</span></div>` : ""}</dd></dl>
     <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
       <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
@@ -236,6 +251,8 @@ function readingClick(e, idx) {
     btns().forEach((b) => b.classList.toggle("sel", +b.dataset.k === k));
     view.sel = k;
     $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
+    const box = $("#sheetbox .core");
+    if (box) core().then((d) => { if (box.isConnected) box.innerHTML = coreHTML(d[box.dataset.root]); });
   };
   const act = e.target.closest("[data-act]");
   if (act) {
