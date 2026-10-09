@@ -633,6 +633,7 @@ function about() {
   app.innerHTML = `<h1>About</h1>
     <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic. Each word shows its meaning, which fades as you learn it. The course covers Al-Fātiḥah and Juz ʿAmma; every sūrah can be read and searched.</p>
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device.</p>
+    <p class="note">Root meanings on the word card quote the classical dictionaries word for word: Lisān al-ʿArab (Ibn Manẓūr), Maqāyīs al-Lugha (Ibn Fāris) and al-Mufradāt (al-Rāghib al-Iṣfahānī), from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī). The English and Urdu line above each quote is a translation of it, made with AI help.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
