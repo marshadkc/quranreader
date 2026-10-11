@@ -1,7 +1,7 @@
 # Quran Word Reader
 
 An installable web app that teaches non-Arabic speakers to understand the Quran directly while reading.
-All 114 sūrahs can be read and searched; the learning course covers Al-Fātiḥah and Juz ʿAmma (Sūrahs 78–114).
+All 114 sūrahs can be read and searched; the learning course covers the whole Quran.
 
 - **Reader:** every word sits in its own box with its English and Urdu meaning under it. Prefixes and endings are coloured, and tapping a word shows its parts, base word and root. Each meaning fades as you learn the word, until you read plain Arabic.
 - **Sūrah list:** every sūrah in a sidebar on the left (a drawer on phones), with a filter by name or number.
