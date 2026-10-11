@@ -14,12 +14,22 @@ export const store = {
 
 export const state = {
   lang: store.get("lang", "both"),     // both | en | ur | none (meanings hidden, to test yourself)
-  level: store.get("level", {}),       // lemma -> 0 new, 1 learning, 2 almost, 3 known
+  level: store.get("shape", null),     // word shape (shapeKey) -> 0 new, 1 learning, 2 almost, 3 known
   honey: store.get("honey", 0),
   combo: 0,
 };
-export const lv = (l) => state.level[l] || 0;
-export const setLevel = (l, n) => { state.level[l] = Math.max(0, Math.min(3, n)); store.set("level", state.level); };
+// A word's level belongs to its shape: the base word as written without vowels, case endings, prefixes or
+// attached pronouns. So رَبُّ, رَبِّكَ and وَرَبُّنَا share one level, but the plural أَرْبَابًا is a new shape to learn
+// where it occurs. Must match shape_key() in tools/build_shapes.py.
+const shapeNorm = (t) => t.replace(/(?<![ىي])\u0670/g, "ا").replace(/[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]/g, "").replace(/[ٱأإآىئؤةۥۦ]/g, (c) => FOLD[c]).replace(/[^\u0621-\u064a]/g, "");
+const shapeKey = (w) => {
+  let n = shapeNorm(w.p.filter((x) => x[1] === "s").map((x) => x[0]).join("").replace(/\u064b[\u0670\u06e2\u06ed]?[اى]$|[اى]\u064b$/, ""));
+  if (w.pos !== "V" && n.endsWith("ت") && !shapeNorm(w.l).endsWith("ت")) n = n.slice(0, -1) + "ه";
+  if (w.pos !== "V" && n.endsWith("ون") && !shapeNorm(w.l).endsWith("ون")) n = n.slice(0, -2) + "ين";
+  return w.l + "|" + n;
+};
+export const lv = (w) => state.level[w.k] || 0;
+export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
 
@@ -36,7 +46,7 @@ const core = () => (CORE ||= json("data/core.json").catch(() => { CORE = null; r
 export async function surah(n) {
   if (!SURAH.has(n)) {
     const d = await json(`data/s/${String(n).padStart(3, "0")}.json`);
-    d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; }));
+    d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; w.k = shapeKey(w); }));
     SURAH.set(n, d);
   }
   return SURAH.get(n);
@@ -106,27 +116,44 @@ export const norm = (t) => t.replace(/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g, "").replace(/[ٱ�
 const spaced = (r) => [...r].join(" ");
 const keyLabel = (k) => (k.startsWith("=") ? k.slice(1) : spaced(k));
 
-// Progress: every right answer (or "I know this") moves a base word one step up, and three steps make it known.
+// Progress: every right answer (or "I know this") moves a word shape one step up, and three steps make it known.
 // A sūrah's progress is the steps its words have made out of all possible steps, so it grows with each answer;
-// a word learned anywhere counts wherever it occurs.
+// a word learned anywhere counts wherever that same shape occurs.
 const pctOf = (x) => (x >= 99.95 ? 100 : x >= 10 || x === 0 ? Math.round(x) : Math.round(x * 10) / 10);
-const progressOf = (ws) => (ws.length ? pctOf((ws.reduce((t, w) => t + lv(w.l), 0) / (3 * ws.length)) * 100) : 0);
-// where each base word occurs, so the home page can show every sūrah's progress without loading them all
-let LEMMAS = null;
-const lemmas = () => (LEMMAS ||= json("data/index/lemmas.json").then((d) => {
+const progressOf = (ws) => (ws.length ? pctOf((ws.reduce((t, w) => t + lv(w), 0) / (3 * ws.length)) * 100) : 0);
+// where each word shape occurs, so the home page can show every sūrah's progress without loading them all
+let SHAPES = null;
+const shapes = () => (SHAPES ||= json("data/index/shapes.json").then((d) => {
   const m = new Map();
-  for (const [l, v] of Object.entries(d)) m.set(l, v.split(",").map((x) => { const [n, c] = x.split(":"); return [+n, +c || 1]; }));
+  for (const [k, v] of Object.entries(d)) m.set(k, v.split(",").map((x) => { const [n, c] = x.split(":"); return [+n, +c || 1]; }));
   return m;
-}).catch(() => { LEMMAS = null; return new Map(); }));
+}).catch(() => { SHAPES = null; return new Map(); }));
 async function quranProgress(idx) {
-  const m = await lemmas(), per = new Map();
+  const m = await shapes(), per = new Map();
   let all = 0;
-  for (const [l, k] of Object.entries(state.level)) {
+  for (const [key, k] of Object.entries(state.level)) {
     if (!k) continue;
-    for (const [n, c] of m.get(l) || []) { per.set(n, (per.get(n) || 0) + k * c); all += k * c; }
+    for (const [n, c] of m.get(key) || []) { per.set(n, (per.get(n) || 0) + k * c); all += k * c; }
   }
   const total = idx.surahs.reduce((t, s) => t + s.words, 0);
   return { all: pctOf((all / (3 * total)) * 100), surah: (n) => pctOf(((per.get(n) || 0) / (3 * idx.surahs[n - 1].words)) * 100) };
+}
+// Levels used to belong to the base word. Carry them over to that word's shapes in the sūrahs the learner
+// worked on (Al-Fātiḥah, Juz ʿAmma and any sūrah practised), so a new shape elsewhere still starts as new.
+async function migrateLevels() {
+  if (state.level) return;
+  const old = store.get("level", {}), level = {};
+  if (Object.keys(old).length) {
+    const worked = new Set([1, ...Array.from({ length: 37 }, (_, i) => 78 + i)]);
+    for (let n = 1; n <= 114; n++) if (store.get("upto." + n, 0) || store.get("prac." + n, null)) worked.add(n);
+    const m = await shapes();
+    if (!m.size) { state.level = {}; return; } // offline: try again next time
+    for (const [key, where] of m) {
+      const k = old[key.slice(0, key.indexOf("|"))];
+      if (k && where.some(([n]) => worked.has(n))) level[key] = k;
+    }
+  }
+  state.level = level; store.set("shape", level);
 }
 const allWords = (d) => d.ayahs.flatMap((a) => a.w);
 const place = (x) => ({ s: Math.floor(x / 1e6), a: Math.floor(x / 1000) % 1000, w: x % 1000 });
@@ -171,7 +198,7 @@ let view = { ws: [], sel: null, prog: null };
 
 function wordHTML(w, k, idx) {
   const pl = w.p.filter((x) => x[1] !== "s").map((x) => (idx.parts[x[2]] || {}).en).filter((x) => x && x !== "—");
-  return `<button class="w lv${hasMeaning(w) ? lv(w.l) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
+  return `<button class="w lv${hasMeaning(w) ? lv(w) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
     <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
 }
 const anyUrdu = (ws) => ws.some((w) => w.ur);
@@ -202,7 +229,7 @@ function versesHTML(ayahs, idx, practiseIn) {
   let k = 0;
   return `<div class="verses${versesClass(ayahs.flatMap((a) => a.w))}" id="verses">
     ${ayahs.map((a) => {
-      const faded = a.w.every((w) => lv(w.l) >= 2);
+      const faded = a.w.every((w) => lv(w) >= 2);
       return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
         <span class="vn">﴿${arN(a.n)}﴾</span></div>
         ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
@@ -237,7 +264,7 @@ function sheetHTML(w, idx) {
   const fam = [...new Set(view.ws.filter((x) => w.r && x.r === w.r && x.t !== w.t).map((x) => x.t))];
   const key = w.r || "=" + w.l;
   return `<div class="sheet" id="sheet">
-    <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w.l)]}</div>
+    <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w)]}</div>
       <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${w.ur ? `<div class="ur">${esc(w.ur)}</div>` : ""}</div>
       <div class="ar big">${arHTML(w)}</div></div>
     <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
@@ -275,10 +302,10 @@ function readingClick(e, idx) {
   const act = e.target.closest("[data-act]");
   if (act) {
     const w = view.ws[view.sel];
-    if (act.dataset.act === "know") setLevel(w.l, lv(w.l) + 1);
-    if (act.dataset.act === "again") setLevel(w.l, 0);
+    if (act.dataset.act === "know") setLevel(w, lv(w) + 1);
+    if (act.dataset.act === "again") setLevel(w, 0);
     if (act.dataset.act !== "close") {
-      btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.l === w.l) b.className = `w lv${hasMeaning(x) ? lv(x.l) : 0}`; });
+      btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.k === w.k) b.className = `w lv${hasMeaning(x) ? lv(x) : 0}`; });
       if (view.prog) view.prog();
     }
     return select(null);
@@ -286,7 +313,7 @@ function readingClick(e, idx) {
   const b = e.target.closest(".w"); if (!b) return;
   const k = +b.dataset.k, w = view.ws[k];
   if (hidden && !b.classList.contains("peek")) { b.classList.add("peek"); return; }
-  if (hasMeaning(w) && lv(w.l) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w.l, 2); return; }
+  if (hasMeaning(w) && lv(w) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w, 2); return; }
   select(k);
 }
 
@@ -319,7 +346,7 @@ async function reader(n, focus) {
   if (!meta) throw new Error(`there is no sūrah ${n}`);
   const d = await withMeanings(n), ws = allWords(d), ready = ws.some(hasMeaning);
   const prog = () => {
-    const pct = progressOf(ws), known = ws.filter((w) => lv(w.l) >= 3).length;
+    const pct = progressOf(ws), known = ws.filter((w) => lv(w) >= 3).length;
     $("#prog").innerHTML = `<span>Your progress in this sūrah</span><strong>${pct}% · ${known.toLocaleString()} of ${ws.length.toLocaleString()} words known</strong>`;
     $("#progfill").style.width = pct + "%";
   };
@@ -538,7 +565,7 @@ async function practise(n, range) {
   };
   const count = () => {
     const f = +$("#pf").value || 1, to = +$("#pt").value || f;
-    const k = new Set(all.filter((w) => w.a >= f && w.a <= to).map((w) => w.l)).size;
+    const k = new Set(all.filter((w) => w.a >= f && w.a <= to).map((w) => w.k)).size;
     $("#pcount").textContent = k ? `${k} different words in āyāt ${f}–${to}. This round: ${opt.len ? Math.min(opt.len, k) : k}.` : "No words in that range.";
   };
   const setupClick = (e) => {
@@ -557,10 +584,10 @@ async function practise(n, range) {
   let r = null; // the current round
   const start = () => {
     const pool = all.filter((w) => w.a >= opt.from && w.a <= opt.to);
-    const byLemma = new Map();
-    for (const w of pool) { if (!byLemma.has(w.l)) byLemma.set(w.l, []); byLemma.get(w.l).push(w); }
-    let deck = [...byLemma.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)])
-      .sort((a, b) => lv(a.l) - lv(b.l) || b.f - a.f || Math.random() - 0.5);
+    const byShape = new Map();
+    for (const w of pool) { if (!byShape.has(w.k)) byShape.set(w.k, []); byShape.get(w.k).push(w); }
+    let deck = [...byShape.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)])
+      .sort((a, b) => lv(a) - lv(b) || b.f - a.f || Math.random() - 0.5);
     if (opt.len) deck = deck.slice(0, opt.len);
     deck.sort(() => Math.random() - 0.5);
     if (!deck.length) return;
@@ -580,7 +607,7 @@ async function practise(n, range) {
     app.innerHTML = `<div class="row"><span class="note">${again ? "Second try" : `Word ${r.i + 1} of ${r.total}`} · āyāt ${opt.from}–${opt.to}${state.combo >= 2 ? ` · streak ${state.combo}` : ""}</span><span class="row">${quizLangHTML(all)}<button class="btn" id="quit">Quit</button></span></div>
       <div class="track"><div class="fill" style="width:${Math.round((Math.min(r.i, r.total) / r.total) * 100)}%"></div></div>
       <section class="card quiz">
-        <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w.l)]}</div>
+        <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w)]}</div>
         <div class="ar big">${arHTML(w)}</div>
         <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
         <div class="opts">${opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>
@@ -618,13 +645,13 @@ async function practise(n, range) {
     marks[r.q.opts.indexOf(w)] = "right";
     let fb;
     if (ok) {
-      state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); r.honey += p; setLevel(w.l, lv(w.l) + 1);
+      state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); r.honey += p; setLevel(w, lv(w) + 1);
       if (first) { r.right++; r.answered++; }
       fb = `<span class="pts">+${p} honey</span> Correct. This meaning will fade a little more in the reader.`;
     } else {
-      marks[i] = "wrong"; state.combo = 0; setLevel(w.l, lv(w.l) - 1);
+      marks[i] = "wrong"; state.combo = 0; setLevel(w, lv(w) - 1);
       if (first) { r.missed.push(w); r.answered++; }
-      if (!r.retried.has(w.l)) { r.retried.add(w.l); r.deck.push(w); fb = `Not quite. It means ${bothHTML(w)}. This word comes back once at the end.`; }
+      if (!r.retried.has(w.k)) { r.retried.add(w.k); r.deck.push(w); fb = `Not quite. It means ${bothHTML(w)}. This word comes back once at the end.`; }
       else fb = `Not quite. It means ${bothHTML(w)}.`;
     }
     r.q.fb = fb; draw();
@@ -777,7 +804,7 @@ function about() {
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
     if (e.target.id !== "reset") return;
-    if (e.target.dataset.sure) { state.level = {}; store.set("level", {}); state.honey = 0; store.set("honey", 0); $("#jar").textContent = 0; $("#resetmsg").textContent = " Progress cleared."; delete e.target.dataset.sure; e.target.textContent = "Clear my progress"; }
+    if (e.target.dataset.sure) { state.level = {}; store.set("shape", {}); store.del("level"); state.honey = 0; store.set("honey", 0); $("#jar").textContent = 0; $("#resetmsg").textContent = " Progress cleared."; delete e.target.dataset.sure; e.target.textContent = "Clear my progress"; }
     else { e.target.dataset.sure = "1"; e.target.textContent = "Tap again to clear everything"; }
   };
 }
@@ -812,6 +839,6 @@ async function route() {
 $("#jar").textContent = state.honey;
 addEventListener("hashchange", route);
 sidebar().catch(() => {});
-route();
+migrateLevels().catch(() => (state.level ||= {})).then(route);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
