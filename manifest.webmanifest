@@ -1,7 +1,7 @@
 {
   "name": "Quran Word Reader",
   "short_name": "Quran Words",
-  "description": "Read Al-Fatihah and Juz Amma word by word until you understand the Arabic without a translation.",
+  "description": "Read the Quran word by word until you understand the Arabic without a translation.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

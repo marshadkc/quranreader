@@ -14,12 +14,29 @@ export const store = {
 
 export const state = {
   lang: store.get("lang", "both"),     // both | en | ur | none (meanings hidden, to test yourself)
-  level: store.get("level", {}),       // lemma -> 0 new, 1 learning, 2 almost, 3 known
+  level: store.get("shape", null),     // word shape (shapeKey) -> 0 new, 1 learning, 2 almost, 3 known
   honey: store.get("honey", 0),
   combo: 0,
 };
-export const lv = (l) => state.level[l] || 0;
-export const setLevel = (l, n) => { state.level[l] = Math.max(0, Math.min(3, n)); store.set("level", state.level); };
+// A word's level belongs to its shape: the base word as written without vowels, case endings, prefixes or
+// attached pronouns, but with a verb's subject ending (he / they denied). So رَبُّ, رَبِّكَ and وَرَبُّنَا share one level, but the plural أَرْبَابًا is a new shape to learn
+// where it occurs. Must match shape_key() in tools/build_shapes.py.
+const shapeNorm = (t) => t.replace(/(?<![ىي])\u0670/g, "ا").replace(/[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]/g, "").replace(/[ٱأإآىئؤةۥۦ]/g, (c) => FOLD[c]).replace(/[^\u0621-\u064a]/g, "");
+// a verb's subject ending (he / they / you / we) belongs to its shape; object pronouns (him, them…) do not
+const SUBJECT = { "وا": "و", "و": "و", "ون": "و", "نا": "نا", "ن": "ن", "تم": "تم", "تمو": "تم", "تما": "تما", "تن": "تن", "ت": "ت", "ي": "ي", "ا": "ا", "ان": "ان", "ءو": "و" };
+const subjectOf = (w) => {
+  if (w.pos !== "V") return "";
+  const x = w.p[w.p.map((y) => y[1]).lastIndexOf("s") + 1];
+  return !x || x[2] === "pron-1S" ? "" : SUBJECT[shapeNorm(x[0])] || "";
+};
+const shapeKey = (w) => {
+  let n = shapeNorm(w.p.filter((x) => x[1] === "s").map((x) => x[0]).join("").replace(/\u064b[\u0670\u06e2\u06ed]?[اى]$|[اى]\u064b$/, ""));
+  if (w.pos !== "V" && n.endsWith("ت") && !shapeNorm(w.l).endsWith("ت")) n = n.slice(0, -1) + "ه";
+  if (w.pos !== "V" && n.endsWith("ون") && !shapeNorm(w.l).endsWith("ون")) n = n.slice(0, -2) + "ين";
+  return w.l + "|" + n + subjectOf(w);
+};
+export const lv = (w) => state.level[w.k] || 0;
+export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
 
@@ -36,7 +53,7 @@ const core = () => (CORE ||= json("data/core.json").catch(() => { CORE = null; r
 export async function surah(n) {
   if (!SURAH.has(n)) {
     const d = await json(`data/s/${String(n).padStart(3, "0")}.json`);
-    d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; }));
+    d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; w.k = shapeKey(w); }));
     SURAH.set(n, d);
   }
   return SURAH.get(n);
@@ -93,7 +110,7 @@ export async function withMeanings(n) {
 }
 const fromQuranCom = (d) => d.ayahs.some((a) => a.w.some(hasMeaning));
 
-export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 78 + i)]; // the course: Al-Fatihah, then An-Naba to An-Nas in the order of the Quran
+export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 78 + i)]; // Al-Fatihah and Juz Amma, where the Word parts page counts its examples
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 export const arHTML = (w) => w.p.map(([t, k]) => (k === "s" ? esc(t) : `<span class="${k}">${esc(t)}</span>`)).join("");
@@ -106,9 +123,44 @@ export const norm = (t) => t.replace(/[ؐ-ًؚ-ٰٟۖ-ۭـ]/g, "").replace(/[ٱ�
 const spaced = (r) => [...r].join(" ");
 const keyLabel = (k) => (k.startsWith("=") ? k.slice(1) : spaced(k));
 
-function unaided(ws) {
-  if (!ws.length) return 0;
-  return Math.round((ws.filter((w) => lv(w.l) >= 3).length / ws.length) * 100);
+// Progress: every right answer (or "I know this") moves a word shape one step up, and three steps make it known.
+// A sūrah's progress is the steps its words have made out of all possible steps, so it grows with each answer;
+// a word learned anywhere counts wherever that same shape occurs.
+const pctOf = (x) => (x >= 99.95 ? 100 : x >= 10 || x === 0 ? Math.round(x) : Math.round(x * 10) / 10);
+const progressOf = (ws) => (ws.length ? pctOf((ws.reduce((t, w) => t + lv(w), 0) / (3 * ws.length)) * 100) : 0);
+// where each word shape occurs, so the home page can show every sūrah's progress without loading them all
+let SHAPES = null;
+const shapes = () => (SHAPES ||= json("data/index/shapes.json").then((d) => {
+  const m = new Map();
+  for (const [k, v] of Object.entries(d)) m.set(k, v.split(",").map((x) => { const [n, c] = x.split(":"); return [+n, +c || 1]; }));
+  return m;
+}).catch(() => { SHAPES = null; return new Map(); }));
+async function quranProgress(idx) {
+  const m = await shapes(), per = new Map();
+  let all = 0;
+  for (const [key, k] of Object.entries(state.level)) {
+    if (!k) continue;
+    for (const [n, c] of m.get(key) || []) { per.set(n, (per.get(n) || 0) + k * c); all += k * c; }
+  }
+  const total = idx.surahs.reduce((t, s) => t + s.words, 0);
+  return { all: pctOf((all / (3 * total)) * 100), surah: (n) => pctOf(((per.get(n) || 0) / (3 * idx.surahs[n - 1].words)) * 100) };
+}
+// Levels used to belong to the base word. Carry them over to that word's shapes in the sūrahs the learner
+// worked on (Al-Fātiḥah, Juz ʿAmma and any sūrah practised), so a new shape elsewhere still starts as new.
+async function migrateLevels() {
+  if (state.level) return;
+  const old = store.get("level", {}), level = {};
+  if (Object.keys(old).length) {
+    const worked = new Set([1, ...Array.from({ length: 37 }, (_, i) => 78 + i)]);
+    for (let n = 1; n <= 114; n++) if (store.get("upto." + n, 0) || store.get("prac." + n, null)) worked.add(n);
+    const m = await shapes();
+    if (!m.size) { state.level = {}; return; } // offline: try again next time
+    for (const [key, where] of m) {
+      const k = old[key.slice(0, key.indexOf("|"))];
+      if (k && where.some(([n]) => worked.has(n))) level[key] = k;
+    }
+  }
+  state.level = level; store.set("shape", level);
 }
 const allWords = (d) => d.ayahs.flatMap((a) => a.w);
 const place = (x) => ({ s: Math.floor(x / 1e6), a: Math.floor(x / 1000) % 1000, w: x % 1000 });
@@ -119,7 +171,7 @@ async function sidebar() {
   const idx = await index();
   $("#surahs").innerHTML = idx.surahs.map((s) => `<li data-n="${s.n}" data-q="${esc(fold(s.en) + "|" + fold(s.meaning) + "|" + norm(s.ar))}">
     <a href="#/s/${s.n}"><span class="sn">${s.n}</span>
-    <span class="nm">${esc(s.en)}${s.course ? `<span class="tag">course</span>` : ""}<small>${esc(s.meaning)} · ${s.ayahs} āyāt</small></span>
+    <span class="nm">${esc(s.en)}<small>${esc(s.meaning)} · ${s.ayahs} āyāt</small></span>
     <span class="an">${esc(s.ar)}</span></a></li>`).join("");
   activeSurah(route.surah);
 }
@@ -153,7 +205,7 @@ let view = { ws: [], sel: null, prog: null };
 
 function wordHTML(w, k, idx) {
   const pl = w.p.filter((x) => x[1] !== "s").map((x) => (idx.parts[x[2]] || {}).en).filter((x) => x && x !== "—");
-  return `<button class="w lv${hasMeaning(w) ? lv(w.l) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
+  return `<button class="w lv${hasMeaning(w) ? lv(w) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
     <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
 }
 const anyUrdu = (ws) => ws.some((w) => w.ur);
@@ -184,7 +236,7 @@ function versesHTML(ayahs, idx, practiseIn) {
   let k = 0;
   return `<div class="verses${versesClass(ayahs.flatMap((a) => a.w))}" id="verses">
     ${ayahs.map((a) => {
-      const faded = a.w.every((w) => lv(w.l) >= 2);
+      const faded = a.w.every((w) => lv(w) >= 2);
       return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
         <span class="vn">﴿${arN(a.n)}﴾</span></div>
         ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
@@ -219,7 +271,7 @@ function sheetHTML(w, idx) {
   const fam = [...new Set(view.ws.filter((x) => w.r && x.r === w.r && x.t !== w.t).map((x) => x.t))];
   const key = w.r || "=" + w.l;
   return `<div class="sheet" id="sheet">
-    <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w.l)]}</div>
+    <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w)]}</div>
       <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${w.ur ? `<div class="ur">${esc(w.ur)}</div>` : ""}</div>
       <div class="ar big">${arHTML(w)}</div></div>
     <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
@@ -257,10 +309,10 @@ function readingClick(e, idx) {
   const act = e.target.closest("[data-act]");
   if (act) {
     const w = view.ws[view.sel];
-    if (act.dataset.act === "know") setLevel(w.l, lv(w.l) + 1);
-    if (act.dataset.act === "again") setLevel(w.l, 0);
+    if (act.dataset.act === "know") setLevel(w, lv(w) + 1);
+    if (act.dataset.act === "again") setLevel(w, 0);
     if (act.dataset.act !== "close") {
-      btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.l === w.l) b.className = `w lv${hasMeaning(x) ? lv(x.l) : 0}`; });
+      btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.k === w.k) b.className = `w lv${hasMeaning(x) ? lv(x) : 0}`; });
       if (view.prog) view.prog();
     }
     return select(null);
@@ -268,31 +320,29 @@ function readingClick(e, idx) {
   const b = e.target.closest(".w"); if (!b) return;
   const k = +b.dataset.k, w = view.ws[k];
   if (hidden && !b.classList.contains("peek")) { b.classList.add("peek"); return; }
-  if (hasMeaning(w) && lv(w.l) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w.l, 2); return; }
+  if (hasMeaning(w) && lv(w) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w, 2); return; }
   select(k);
 }
 
 // ---------- views ----------
 async function home() {
-  const idx = await index();
-  const course = idx.surahs.filter((s) => s.course);
-  const loaded = await Promise.all(ORDER.map(surah));
-  const pct = unaided(loaded.filter((d) => d.n !== 1).flatMap(allWords));
+  const idx = await index(), p = await quranProgress(idx);
+  const total = idx.surahs.reduce((t, s) => t + s.words, 0);
   app.innerHTML = `
     <section class="progress">
-      <div class="eyebrow">Course · Al-Fātiḥah and Juz ʿAmma · ${course.reduce((t, s) => t + s.words, 0).toLocaleString()} words</div>
+      <div class="eyebrow">Course · the whole Quran · 114 sūrahs · ${total.toLocaleString()} words</div>
       <h1>Read the Quran without a translation</h1>
-      <p class="sub">Each word's meaning sits under it and fades as you learn it. Practise, and watch the page turn into plain Arabic.</p>
-      <div class="row"><span>Juz ʿAmma read without help</span><strong>${pct}%</strong></div>
-      <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+      <p class="sub">Each word's meaning sits under it and fades as you learn it. Practise, and watch the page turn into plain Arabic. <a href="#/about">How to learn</a></p>
+      <div class="row"><span>Your progress through the Quran</span><strong>${p.all}%</strong></div>
+      <div class="track"><div class="fill" style="width:${p.all}%"></div></div>
     </section>
-    <div class="row"><span class="note">All 114 sūrahs are in the sūrah list. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
+    <div class="row"><span class="note">Every right answer moves a word one step; three steps and it is known. A word you know counts wherever it occurs. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
     <ul class="list">
-      ${ORDER.map((n) => {
-        const s = idx.surahs.find((x) => x.n === n), p = unaided(allWords(SURAH.get(n)));
-        return `<li><a href="#/s/${n}"><span class="num">${n}</span>
-          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words} words</small>
-          <span class="mini"><i style="width:${p}%"></i></span></span>
+      ${idx.surahs.map((s) => {
+        const sp = p.surah(s.n);
+        return `<li><a href="#/s/${s.n}"><span class="num">${s.n}</span>
+          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words.toLocaleString()} words${sp ? ` · ${sp}%` : ""}</small>
+          <span class="mini"><i style="width:${sp}%"></i></span></span>
           <span class="arname">${esc(s.ar)}</span></a></li>`;
       }).join("")}
     </ul>`;
@@ -303,8 +353,8 @@ async function reader(n, focus) {
   if (!meta) throw new Error(`there is no sūrah ${n}`);
   const d = await withMeanings(n), ws = allWords(d), ready = ws.some(hasMeaning);
   const prog = () => {
-    const pct = unaided(ws);
-    $("#prog").innerHTML = `<span>Read without help</span><strong>${pct}% · ${ws.filter((w) => lv(w.l) >= 3).length} of ${ws.length} words</strong>`;
+    const pct = progressOf(ws), known = ws.filter((w) => lv(w) >= 3).length;
+    $("#prog").innerHTML = `<span>Your progress in this sūrah</span><strong>${pct}% · ${known.toLocaleString()} of ${ws.length.toLocaleString()} words known</strong>`;
     $("#progfill").style.width = pct + "%";
   };
   view = { ws, sel: null, prog };
@@ -316,7 +366,7 @@ async function reader(n, focus) {
       <div class="track"><div class="fill" id="progfill"></div></div>
     </section>
     <div class="row">${langHTML(ws)}
-      ${ready ? `<a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a>` : ""}</div>
+      ${ready ? `<span class="row"><a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a><a class="btn" href="#/s/${n}/roots">Root challenge</a></span>` : ""}</div>
     ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
     ${versesHTML(d.ayahs, idx, n)}
     ${fromQuranCom(d) ? CREDIT : ""}`;
@@ -515,13 +565,14 @@ async function practise(n, range) {
         <p class="note" id="pcount"></p>
         ${upto(n) ? `<p class="note">"Practise up to here" in the reader continues after āyah ${upto(n)}, where your last round ended. <button class="btn small" id="preset">Start over from āyah 1</button></p>` : ""}
         <button class="btn primary" id="pgo">Start</button>
+        <p class="note">Ready for more? The optional <a href="#/s/${n}/roots/${opt.from}-${opt.to}">Root challenge</a> asks each word's root and its deep meaning.</p>
       </section>`;
     count();
     app.oninput = count;
   };
   const count = () => {
     const f = +$("#pf").value || 1, to = +$("#pt").value || f;
-    const k = new Set(all.filter((w) => w.a >= f && w.a <= to).map((w) => w.l)).size;
+    const k = new Set(all.filter((w) => w.a >= f && w.a <= to).map((w) => w.k)).size;
     $("#pcount").textContent = k ? `${k} different words in āyāt ${f}–${to}. This round: ${opt.len ? Math.min(opt.len, k) : k}.` : "No words in that range.";
   };
   const setupClick = (e) => {
@@ -540,10 +591,10 @@ async function practise(n, range) {
   let r = null; // the current round
   const start = () => {
     const pool = all.filter((w) => w.a >= opt.from && w.a <= opt.to);
-    const byLemma = new Map();
-    for (const w of pool) { if (!byLemma.has(w.l)) byLemma.set(w.l, []); byLemma.get(w.l).push(w); }
-    let deck = [...byLemma.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)])
-      .sort((a, b) => lv(a.l) - lv(b.l) || b.f - a.f || Math.random() - 0.5);
+    const byShape = new Map();
+    for (const w of pool) { if (!byShape.has(w.k)) byShape.set(w.k, []); byShape.get(w.k).push(w); }
+    let deck = [...byShape.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)])
+      .sort((a, b) => lv(a) - lv(b) || b.f - a.f || Math.random() - 0.5);
     if (opt.len) deck = deck.slice(0, opt.len);
     deck.sort(() => Math.random() - 0.5);
     if (!deck.length) return;
@@ -563,7 +614,7 @@ async function practise(n, range) {
     app.innerHTML = `<div class="row"><span class="note">${again ? "Second try" : `Word ${r.i + 1} of ${r.total}`} · āyāt ${opt.from}–${opt.to}${state.combo >= 2 ? ` · streak ${state.combo}` : ""}</span><span class="row">${quizLangHTML(all)}<button class="btn" id="quit">Quit</button></span></div>
       <div class="track"><div class="fill" style="width:${Math.round((Math.min(r.i, r.total) / r.total) * 100)}%"></div></div>
       <section class="card quiz">
-        <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w.l)]}</div>
+        <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w)]}</div>
         <div class="ar big">${arHTML(w)}</div>
         <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
         <div class="opts">${opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>
@@ -580,6 +631,7 @@ async function practise(n, range) {
         <h2>${quit ? "Round stopped" : "Round complete"}</h2>
         <div class="big-score">${r.right} of ${asked}</div>
         <div class="note">right on the first try · āyāt ${opt.from}–${opt.to}${r.honey ? ` · <span class="pts">+${r.honey} honey</span>` : ""}</div>
+        <div class="note">Your progress in ${esc(d.en)}: <strong>${progressOf(allWords(d))}%</strong></div>
         ${missed.length ? `<div class="missed"><div class="note">Words to look at again</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
         <div class="btns"><button class="btn primary" id="again">Practise again</button>${opt.from > 1 ? `<a class="btn" href="#/s/${n}/practise/1-${opt.to}" id="widen">Review āyāt 1–${opt.to}</a>` : ""}<button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
       </section>`;
@@ -600,16 +652,121 @@ async function practise(n, range) {
     marks[r.q.opts.indexOf(w)] = "right";
     let fb;
     if (ok) {
-      state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); r.honey += p; setLevel(w.l, lv(w.l) + 1);
+      state.combo++; const p = state.combo >= 5 ? 20 : 10; addHoney(p); r.honey += p; setLevel(w, lv(w) + 1);
       if (first) { r.right++; r.answered++; }
       fb = `<span class="pts">+${p} honey</span> Correct. This meaning will fade a little more in the reader.`;
     } else {
-      marks[i] = "wrong"; state.combo = 0; setLevel(w.l, lv(w.l) - 1);
+      marks[i] = "wrong"; state.combo = 0; setLevel(w, lv(w) - 1);
       if (first) { r.missed.push(w); r.answered++; }
-      if (!r.retried.has(w.l)) { r.retried.add(w.l); r.deck.push(w); fb = `Not quite. It means ${bothHTML(w)}. This word comes back once at the end.`; }
+      if (!r.retried.has(w.k)) { r.retried.add(w.k); r.deck.push(w); fb = `Not quite. It means ${bothHTML(w)}. This word comes back once at the end.`; }
       else fb = `Not quite. It means ${bothHTML(w)}.`;
     }
     r.q.fb = fb; draw();
+  };
+}
+
+// Root challenge (optional, harder): for each root in the chosen āyāt, pick the root of a word, then its deep meaning.
+async function rootChallenge(n, range) {
+  const d = await withMeanings(n), cr = await core(), all = allWords(d);
+  const has = (r) => r && cr[r] && cr[r].en;
+  const pool = all.filter((w) => has(w.r));
+  if (!pool.length) { app.innerHTML = `<div class="banner">Root meanings haven't loaded. Check your connection and try again.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
+  const last = d.ayahs.length, m = /^(\d+)-(\d+)$/.exec(range || "");
+  const opt = { from: m ? +m[1] : 1, to: m ? +m[2] : last, len: 10 };
+  const roots = Object.keys(cr).filter(has), here = [...new Set(pool.map((w) => w.r))];
+  const lang = () => (quizLang(all) === "ur" ? "ur" : "en");
+  const gist = (r) => cr[r][lang()] || cr[r].en;
+  // wrong options: other roots of this sūrah first, then any; never one that reads the same
+  const others = (r, k, f) => {
+    const out = [], seen = new Set([f(r)]);
+    for (const x of [...here.filter((x) => x !== r).sort(() => Math.random() - 0.5), ...roots.sort(() => Math.random() - 0.5)]) {
+      if (out.length === k) break;
+      if (x !== r && !seen.has(f(x))) { seen.add(f(x)); out.push(x); }
+    }
+    return out;
+  };
+  let c = null;
+  const setup = () => {
+    c = null;
+    app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
+      <section class="card practise-setup">
+        <h2>Root challenge · ${esc(d.en)}</h2>
+        <p class="note">A harder, optional round. For each word: first choose its root, then the root's deep meaning from the classical dictionaries.</p>
+        <div class="range"><label>From āyah <input id="pf" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.from}"></label>
+          <label>to <input id="pt" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.to}"></label></div>
+        <div class="row"><span>Answers in</span>${quizLangHTML(all) || `<span class="note">English</span>`}</div>
+        <div class="row"><span>Roots</span><div class="seg" aria-label="How many roots">${LENGTHS.map((l) => `<button data-len="${l}" aria-pressed="${opt.len === l}">${l || "All"}</button>`).join("")}</div></div>
+        <button class="btn primary" id="rgo">Start</button>
+      </section>`;
+  };
+  const start = () => {
+    const byRoot = new Map();
+    for (const w of pool) if (w.a >= opt.from && w.a <= opt.to) { if (!byRoot.has(w.r)) byRoot.set(w.r, []); byRoot.get(w.r).push(w); }
+    let deck = [...byRoot.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)]).sort(() => Math.random() - 0.5);
+    if (opt.len) deck = deck.slice(0, opt.len);
+    if (!deck.length) { app.querySelector(".practise-setup .note").textContent = "No words with a root meaning in those āyāt. Choose other āyāt."; return; }
+    c = { deck, i: 0, right: 0, steps: 0, honey: 0, missed: [] };
+    ask();
+  };
+  const ask = () => {
+    const w = c.deck[c.i];
+    c.q = { w, step: 1, opts: [w.r, ...others(w.r, 3, (x) => x)].sort(() => Math.random() - 0.5), marks: {}, done: false, fb: "Which root does the highlighted word come from?" };
+    draw();
+  };
+  const draw = () => {
+    const { w, step, opts, marks, done, fb } = c.q, a = d.ayahs.find((x) => x.n === w.a), ur = lang() === "ur";
+    app.innerHTML = `<div class="row"><span class="note">Root ${c.i + 1} of ${c.deck.length} · step ${step} of 2</span><span class="row">${quizLangHTML(all)}<button class="btn" id="quit">Quit</button></span></div>
+      <div class="track"><div class="fill" style="width:${Math.round(((c.i * 2 + step - 1) / (c.deck.length * 2)) * 100)}%"></div></div>
+      <section class="card quiz">
+        <div class="note">${w.s}:${w.a} · ${esc(meaningOf(w, lang()))}</div>
+        <div class="ar big">${arHTML(w)}</div>
+        <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
+        ${step === 2 ? `<div>The root <span class="ar" style="font-size:26px">${esc(spaced(w.r))}</span> means…</div>` : ""}
+        <div class="opts">${opts.map((o, i) => `<button class="opt${step === 1 ? " ar" : ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}"${step === 1 ? ' style="font-size:24px"' : ""}>${esc(step === 1 ? spaced(o) : gist(o))}</button>`).join("")}</div>
+        <div class="fb">${fb}</div>
+        ${done && step === 2 ? `<div class="core" style="align-self:stretch">${coreHTML(cr[w.r], w.r)}</div>` : ""}
+        ${done ? `<button class="btn primary" id="next">${step === 1 ? "Now its meaning" : c.i + 1 < c.deck.length ? "Next root" : "See my score"}</button>` : ""}
+      </section>`;
+  };
+  const summary = (quit) => {
+    c.ended = true; c.quit = quit;
+    app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
+      <section class="card quiz">
+        <h2>${quit ? "Challenge stopped" : "Challenge complete"}</h2>
+        <div class="big-score">${c.right} of ${c.steps}</div>
+        <div class="note">steps right · āyāt ${opt.from}–${opt.to}${c.honey ? ` · <span class="pts">+${c.honey} honey</span>` : ""}</div>
+        ${c.missed.length ? `<div class="missed"><div class="note">Roots to look at again</div>${c.missed.map((r) => `<div class="mrow"><span class="ar">${esc(spaced(r))}</span><span>${esc(cr[r].en)}${cr[r].ur ? ` · <span class="ur">${esc(cr[r].ur)}</span>` : ""}</span></div>`).join("")}</div>` : c.steps ? `<div class="note">No mistakes. Well done.</div>` : ""}
+        <div class="btns"><button class="btn primary" id="again">Try again</button><button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
+      </section>`;
+  };
+  setup();
+  app.onclick = (e) => {
+    const ql = e.target.closest("[data-qlang]");
+    if (ql) { setQuizLang(ql); return !c ? undefined : c.ended ? summary(c.quit) : draw(); }
+    if (!c) {
+      const lb = e.target.closest("[data-len]");
+      if (lb) { opt.len = +lb.dataset.len; app.querySelectorAll("[data-len]").forEach((b) => b.setAttribute("aria-pressed", b === lb)); return; }
+      if (e.target.id === "rgo") {
+        let f = Math.min(Math.max(1, +$("#pf").value || 1), last), to = Math.min(Math.max(1, +$("#pt").value || f), last);
+        if (f > to) [f, to] = [to, f];
+        Object.assign(opt, { from: f, to }); start();
+      }
+      return;
+    }
+    if (e.target.id === "quit") return summary(true);
+    if (e.target.id === "again") return start();
+    if (e.target.id === "other") return setup();
+    if (e.target.id === "next") {
+      const { w, step } = c.q;
+      if (step === 1) { c.q = { w, step: 2, opts: [w.r, ...others(w.r, 3, gist)].sort(() => Math.random() - 0.5), marks: {}, done: false, fb: "Choose the deep meaning of this root." }; return draw(); }
+      c.i++; return c.i < c.deck.length ? ask() : summary(false);
+    }
+    const o = e.target.closest(".opt"); if (!o || c.q.done) return;
+    const q = c.q, i = +o.dataset.o, ok = q.opts[i] === q.w.r;
+    q.done = true; c.steps++; q.marks[q.opts.indexOf(q.w.r)] = "right";
+    if (ok) { c.right++; c.honey += 15; addHoney(15); q.fb = `<span class="pts">+15 honey</span> Correct.`; }
+    else { q.marks[i] = "wrong"; if (!c.missed.includes(q.w.r)) c.missed.push(q.w.r); q.fb = q.step === 1 ? `Not quite. The root is <span class="ar" style="font-size:22px">${esc(spaced(q.w.r))}</span>.` : "Not quite. Here is what the dictionaries say:"; }
+    draw();
   };
 }
 
@@ -631,14 +788,30 @@ async function parts() {
 
 function about() {
   app.innerHTML = `<h1>About</h1>
-    <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic. Each word shows its meaning, which fades as you learn it. The course covers Al-Fātiḥah and Juz ʿAmma; every sūrah can be read and searched.</p>
+    <div class="card"><p>Quran Word Reader helps you understand the Quran directly in Arabic, without relying on a translation. The course covers the whole Quran, one small set of āyāt at a time.</p></div>
+    <div class="card how"><h2>How to learn</h2>
+      <ol>
+        <li><strong>Take a small set of āyāt</strong>: 3, 5 or 10, as your free time allows each day.</li>
+        <li><strong>Say each Arabic word aloud, then its meaning</strong> in English or Urdu (choose Both, English or اردو above the āyāt).</li>
+        <li><strong>Repeat the set 7 times.</strong> That's all.</li>
+        <li><strong>Test yourself:</strong> tap <em>None</em> to hide the meanings and read the set once more. Tap a word if you need to peek.</li>
+        <li><strong>Practise:</strong> tap <em>Practise āyāt X–Y</em> under the last āyah of your set. Each word comes up once; any you miss come back at the end.</li>
+        <li><strong>Read the real muṣḥaf.</strong> Take a muṣḥaf without a translation in your hands. You will understand the meanings 😊</li>
+      </ol>
+      <p>Gradually complete the sūrah, and then the Quran, in this way.</p></div>
+    <div class="card how"><h2>Practice and quizzes</h2>
+      <p><strong>Practise this sūrah</strong> (or <em>Practise āyāt X–Y</em> under any āyah): choose the āyāt and how many words, then pick each word's meaning. Every right answer moves the word one step: learning, almost, known. Its meaning fades in the reader as it moves up.</p>
+      <p><strong>Root challenge</strong> (optional, harder): choose the root of each word, then its deep meaning from the classical dictionaries.</p>
+      <p><strong>Honeycomb</strong>: answer words to fill a path across the comb and collect honey. <em>Two teams</em> plays a race on one screen for a class.</p>
+      <p><strong>Your progress</strong>: each sūrah shows how far its words have moved toward known, and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
+    <div class="card">
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device.</p>
     <p class="note">Root meanings on the word card quote the classical dictionaries word for word: Lisān al-ʿArab (Ibn Manẓūr), Maqāyīs al-Lugha (Ibn Fāris) and al-Mufradāt (al-Rāghib al-Iṣfahānī), from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī). The English and Urdu line above each quote is a translation of it, made with AI help.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
   app.onclick = (e) => {
     if (e.target.id !== "reset") return;
-    if (e.target.dataset.sure) { state.level = {}; store.set("level", {}); state.honey = 0; store.set("honey", 0); $("#jar").textContent = 0; $("#resetmsg").textContent = " Progress cleared."; delete e.target.dataset.sure; e.target.textContent = "Clear my progress"; }
+    if (e.target.dataset.sure) { state.level = {}; store.set("shape", {}); store.del("level"); state.honey = 0; store.set("honey", 0); $("#jar").textContent = 0; $("#resetmsg").textContent = " Progress cleared."; delete e.target.dataset.sure; e.target.textContent = "Clear my progress"; }
     else { e.target.dataset.sure = "1"; e.target.textContent = "Tap again to clear everything"; }
   };
 }
@@ -655,7 +828,9 @@ async function route() {
   let anchored = false;
   try {
     if (h[0] === "s" && h[1]) {
-      if (h[2] === "practise") await practise(+h[1], h[3]); else anchored = await reader(+h[1], +h[2] || 0);
+      if (h[2] === "practise") await practise(+h[1], h[3]);
+      else if (h[2] === "roots") await rootChallenge(+h[1], h[3]);
+      else anchored = await reader(+h[1], +h[2] || 0);
     } else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();
@@ -671,6 +846,6 @@ async function route() {
 $("#jar").textContent = state.honey;
 addEventListener("hashchange", route);
 sidebar().catch(() => {});
-route();
+migrateLevels().catch(() => (state.level ||= {})).then(route);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
