@@ -19,14 +19,21 @@ export const state = {
   combo: 0,
 };
 // A word's level belongs to its shape: the base word as written without vowels, case endings, prefixes or
-// attached pronouns. So رَبُّ, رَبِّكَ and وَرَبُّنَا share one level, but the plural أَرْبَابًا is a new shape to learn
+// attached pronouns, but with a verb's subject ending (he / they denied). So رَبُّ, رَبِّكَ and وَرَبُّنَا share one level, but the plural أَرْبَابًا is a new shape to learn
 // where it occurs. Must match shape_key() in tools/build_shapes.py.
 const shapeNorm = (t) => t.replace(/(?<![ىي])\u0670/g, "ا").replace(/[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]/g, "").replace(/[ٱأإآىئؤةۥۦ]/g, (c) => FOLD[c]).replace(/[^\u0621-\u064a]/g, "");
+// a verb's subject ending (he / they / you / we) belongs to its shape; object pronouns (him, them…) do not
+const SUBJECT = { "وا": "و", "و": "و", "ون": "و", "نا": "نا", "ن": "ن", "تم": "تم", "تمو": "تم", "تما": "تما", "تن": "تن", "ت": "ت", "ي": "ي", "ا": "ا", "ان": "ان", "ءو": "و" };
+const subjectOf = (w) => {
+  if (w.pos !== "V") return "";
+  const x = w.p[w.p.map((y) => y[1]).lastIndexOf("s") + 1];
+  return !x || x[2] === "pron-1S" ? "" : SUBJECT[shapeNorm(x[0])] || "";
+};
 const shapeKey = (w) => {
   let n = shapeNorm(w.p.filter((x) => x[1] === "s").map((x) => x[0]).join("").replace(/\u064b[\u0670\u06e2\u06ed]?[اى]$|[اى]\u064b$/, ""));
   if (w.pos !== "V" && n.endsWith("ت") && !shapeNorm(w.l).endsWith("ت")) n = n.slice(0, -1) + "ه";
   if (w.pos !== "V" && n.endsWith("ون") && !shapeNorm(w.l).endsWith("ون")) n = n.slice(0, -2) + "ين";
-  return w.l + "|" + n;
+  return w.l + "|" + n + subjectOf(w);
 };
 export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
