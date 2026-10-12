@@ -14,12 +14,18 @@ SRC = {"l": "lisan", "m": "maqayees", "r": "mufradat-ragheb"}
 clean = lambda t: re.sub(r"\s+", " ", re.sub(r"\[\[.*?\]\]", "", t)).strip()
 raw = {}
 for f in sys.argv[2:]:
-    for root, rec in json.load(open(f)).items(): raw.setdefault(root, {}).update(rec)
+    for root, rec in json.load(open(f)).items():
+        for src, e in rec.items():
+            if src.startswith("x:"):  # an entry under a sister spelling ("x:سرط:mufradat-ragheb"), quoted with "from"
+                _, other, src = src.split(":")
+                raw.setdefault(other, {})[src] = e
+            else:
+                raw.setdefault(root, {})[src] = e
 out, bad = {}, []
 for p in json.load(open(sys.argv[1])):
     root, rec, qs = p["root"], raw.get(p["root"], {}), []
     for q in p.get("q", []):
-        e = rec.get(SRC.get(q.get("s")))
+        e = raw.get(q["from"], {}).get(SRC.get(q.get("s"))) if q.get("from") else rec.get(SRC.get(q.get("s")))
         t = q.get("t", "").strip(" .،:")
         if e and len(t) > 3 and t in clean(e["data"]): qs.append([q["s"], t, e["w"]])
         else: bad.append((root, q))

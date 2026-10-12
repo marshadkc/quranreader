@@ -266,15 +266,50 @@ const langHTML = (ws) => `<div class="seg" aria-label="Meaning language">
 
 // Root meaning: a short line in the reader's language where one is approved, then the dictionaries' own words
 const BOOKS = { l: ["lisan", "Ibn Manẓūr, Lisān al-ʿArab"], m: ["maqayees", "Ibn Fāris, Maqāyīs al-Lugha"], r: ["mufradat-ragheb", "al-Rāghib, al-Mufradāt"] };
-function coreHTML(c, r) {
+// The dictionaries in the root card's list, oldest first after the default. Their full entries are stored in
+// data/dict/ROOT.json (from tafsir.app) and loaded when a word card opens. al-Muʿjam al-Ishtiqāqī is a modern
+// book still under copyright, so it is only linked.
+const DICTS = [
+  ["m", "maqayees", "Maqāyīs al-Lugha", "Ibn Fāris (d. 395)"],
+  ["r", "mufradat-ragheb", "al-Mufradāt", "al-Rāghib al-Iṣfahānī (d. 502)"],
+  ["l", "lisan", "Lisān al-ʿArab", "Ibn Manẓūr (d. 711)"],
+  ["s", "alsihah", "al-Ṣiḥāḥ", "al-Jawharī (d. 393)"],
+  ["q", "qamoos", "al-Qāmūs al-Muḥīṭ", "al-Fīrūzābādī (d. 817)"],
+  ["b", "basair-tamyeez", "Baṣāʾir Dhawī al-Tamyīz", "al-Fīrūzābādī (d. 817)"],
+  ["u", "umdah-alhufadh", "ʿUmdat al-Ḥuffāẓ", "al-Samīn al-Ḥalabī (d. 756)"],
+  ["i", "ishtiqaqi", "al-Muʿjam al-Ishtiqāqī", "Muḥammad Ḥasan Jabal (d. 2015), on tafsir.app only"],
+];
+const DICT = new Map();
+const dictOf = (r) => { if (!DICT.has(r)) DICT.set(r, json(`data/dict/${encodeURIComponent(r)}.json`).catch(() => { DICT.delete(r); return null; })); return DICT.get(r); };
+function coreHTML(c, r, list = false) {
+  const gist = c ? ["en", "ur"].filter((l) => c[l] && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !c.ur)))
+    .map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(c.ur)}</div>` : `<div><strong>${esc(c.en)}</strong></div>`).join("") : "";
+  if (list) {
+    const pick = raw.get("dict", "m");
+    const from = [...new Set((c?.q || []).map(([k]) => DICTS.find((x) => x[0] === k)?.[2]))].filter(Boolean);
+    return `<div class="eyebrow">Root meaning</div>${gist}${from.length ? `<div class="note">Summed up from ${from.map(esc).join(" and ")} (its words are marked in that entry)</div>` : ""}
+      <label class="dpick"><span class="note">Dictionary</span><select data-dict>${DICTS.map(([k, , name, by]) => `<option value="${k}" ${k === pick ? "selected" : ""}>${esc(name)}${k === "i" ? " (link)" : ""}</option>`).join("")}</select></label>
+      <div class="entry" data-entry dir="rtl"><span class="note" dir="ltr">Loading…</span></div>`;
+  }
   if (!c) return "";
-  const gist = ["en", "ur"].filter((l) => c[l] && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !c.ur)))
-    .map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(c.ur)}</div>` : `<div><strong>${esc(c.en)}</strong></div>`).join("");
   const quotes = (c.q || []).map(([k, t, form]) =>
     `<div class="q"><span class="ar" dir="rtl">${esc(t)}</span> <a class="note" href="https://tafsir.app/${BOOKS[k][0]}/${encodeURIComponent(form)}" target="_blank" rel="noopener">${BOOKS[k][1]}</a></div>`).join("");
-  const root = encodeURIComponent(c.q?.[0]?.[2] || "");
-  return `<div class="eyebrow">Root meaning</div>${gist}${quotes}
-    <div class="note">More: <a href="https://tafsir.app/ishtiqaqi/${root || encodeURIComponent(r)}" target="_blank" rel="noopener">al-Muʿjam al-Ishtiqāqī</a> · <a href="https://tafsir.app/lisan/${root || encodeURIComponent(r)}" target="_blank" rel="noopener">full entries on tafsir.app</a></div>`;
+  return `<div class="eyebrow">Root meaning</div>${gist}${quotes}`;
+}
+// the chosen dictionary's whole entry for the root, with the phrase quoted above it marked
+function entryHTML(d, c, r, k) {
+  const [, src, name, by] = DICTS.find((x) => x[0] === k) || DICTS[0];
+  const link = (w) => `<span class="note">${esc(by.replace(/, on.*/, ""))} · </span><a class="note" dir="ltr" href="https://tafsir.app/${src}/${encodeURIComponent(w)}" target="_blank" rel="noopener">${esc(name)} on tafsir.app</a>`;
+  if (k === "i") return `<p class="note" dir="ltr">${esc(name)} by ${esc(by.replace(/, on.*/, ""))} is a modern book still under copyright, so its entry is not copied into this app.</p><div dir="ltr">${link((d && d.w) || r)}</div>`;
+  const parts = [];
+  for (const [root, e] of [[r, d], ...Object.entries((d && d.x) || {})]) {
+    const t = e && e[k];
+    if (!t) continue;
+    let h = esc(t);
+    for (const [qk, q, form] of (c && c.q) || []) if (qk === k && (root === r || form === root)) h = h.replace(esc(q), `<mark>${esc(q)}</mark>`);
+    parts.push(`${root !== r ? `<div class="note" dir="ltr">Also under the root <span class="ar">${esc(spaced(root))}</span>:</div>` : ""}<div class="ar">${h.replace(/\n+/g, "<br>")}</div>`);
+  }
+  return (parts.length ? parts.join("") : `<p class="note" dir="ltr">${esc(name)} has no entry for this root.</p>`) + `<div dir="ltr">${link((d && d.w) || r)}</div>`;
 }
 function sheetHTML(w, idx) {
   const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
@@ -317,7 +352,20 @@ function readingClick(e, idx) {
     view.sel = k;
     $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
     const box = $("#sheetbox .core");
-    if (box) core().then((d) => { if (box.isConnected) box.innerHTML = coreHTML(d[box.dataset.root], box.dataset.root); });
+    if (box) {
+      const r = box.dataset.root;
+      Promise.all([core(), dictOf(r)]).then(([cs, d]) => {
+        if (!box.isConnected) return;
+        box.innerHTML = coreHTML(cs[r], r, true);
+        const has = (k) => !!(d && (d[k] || Object.values(d.x || {}).some((e) => e[k])));
+        const sel = box.querySelector("[data-dict]");
+        // the chosen dictionary may have no entry for this root: show the first one that has
+        if (!has(sel.value) && sel.value !== "i") { const k = DICTS.find(([k]) => has(k))?.[0]; if (k) sel.value = k; }
+        const show = () => { box.querySelector("[data-entry]").innerHTML = entryHTML(d, cs[r], r, sel.value); };
+        box.onchange = (e) => { if (e.target.dataset.dict !== undefined) { raw.set("dict", e.target.value); show(); } };
+        show();
+      });
+    }
   };
   const act = e.target.closest("[data-act]");
   if (act) {
@@ -819,7 +867,7 @@ function about() {
       <p><strong>Your progress</strong>: each sūrah shows how far its words have moved toward known, and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
     <div class="card">
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device, in the profile you are using.</p>
-    <p class="note">Root meanings on the word card quote the classical dictionaries word for word: Lisān al-ʿArab (Ibn Manẓūr), Maqāyīs al-Lugha (Ibn Fāris) and al-Mufradāt (al-Rāghib al-Iṣfahānī), from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī). The English and Urdu line above each quote is a translation of it, made with AI help.</p>
+    <p class="note">Root meanings on the word card come from the classical dictionaries: Maqāyīs al-Lugha (Ibn Fāris), al-Mufradāt (al-Rāghib al-Iṣfahānī), Lisān al-ʿArab (Ibn Manẓūr), al-Ṣiḥāḥ (al-Jawharī), al-Qāmūs al-Muḥīṭ and Baṣāʾir Dhawī al-Tamyīz (al-Fīrūzābādī) and ʿUmdat al-Ḥuffāẓ (al-Samīn al-Ḥalabī). Their entries are copied word for word from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī) and stored in the app. Choose a dictionary in the list on the word card. al-Muʿjam al-Ishtiqāqī (Muḥammad Ḥasan Jabal) is still under copyright, so it is linked rather than copied. The English and Urdu line above each entry is a translation of the dictionaries, made with AI help.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <p class="note">Version ${VERSION_NO}. <button class="btn" id="upd">Check for update</button> <span class="note" id="updmsg"></span></p>
     <p><a class="btn" href="#/profile">Profiles and clearing progress</a></p>`;
