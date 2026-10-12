@@ -51,7 +51,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 23; // keep in step with VERSION in sw.js
+const VERSION_NO = 24; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -287,7 +287,7 @@ function coreHTML(c, r, list = false) {
   if (list) {
     const pick = raw.get("dict", "m");
     const from = [...new Set((c?.q || []).map(([k]) => DICTS.find((x) => x[0] === k)?.[2]))].filter(Boolean);
-    return `<div class="eyebrow">Root meaning</div>${gist}${from.length ? `<div class="note">Summed up from ${from.map(esc).join(" and ")} (its words are marked in that entry)</div>` : ""}
+    return `<div class="eyebrow">Root meaning</div>${gist}${from.length ? `<div class="note">Summed up from ${from.map(esc).join(" and ")} (the words used are marked in ${from.length > 1 ? "their entries" : "its entry"})</div>` : ""}
       <label class="dpick"><span class="note">Dictionary</span><select data-dict>${DICTS.map(([k, , name, by]) => `<option value="${k}" ${k === pick ? "selected" : ""}>${esc(name)}${k === "i" ? " (link)" : ""}</option>`).join("")}</select></label>
       <div class="entry" data-entry dir="rtl"><span class="note" dir="ltr">Loading…</span></div>`;
   }
