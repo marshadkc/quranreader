@@ -51,7 +51,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 24; // keep in step with VERSION in sw.js
+const VERSION_NO = 25; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -266,9 +266,10 @@ const langHTML = (ws) => `<div class="seg" aria-label="Meaning language">
 
 // Root meaning: a short line in the reader's language where one is approved, then the dictionaries' own words
 const BOOKS = { l: ["lisan", "Ibn Manẓūr, Lisān al-ʿArab"], m: ["maqayees", "Ibn Fāris, Maqāyīs al-Lugha"], r: ["mufradat-ragheb", "al-Rāghib, al-Mufradāt"] };
-// The dictionaries in the root card's list, oldest first after the default. Their full entries are stored in
-// data/dict/ROOT.json (from tafsir.app) and loaded when a word card opens. al-Muʿjam al-Ishtiqāqī is a modern
-// book still under copyright, so it is only linked.
+// The dictionaries in the root card's list, the default first. For each root, data/root/ROOT.json holds every
+// dictionary's meaning summed up in English and Urdu, with the exact phrase from its entry that the summary rests
+// on (built by tools/build_core.py from the entries on tafsir.app). al-Muʿjam al-Ishtiqāqī is a modern book still
+// under copyright, so it is only linked.
 const DICTS = [
   ["m", "maqayees", "Maqāyīs al-Lugha", "Ibn Fāris (d. 395)"],
   ["r", "mufradat-ragheb", "al-Mufradāt", "al-Rāghib al-Iṣfahānī (d. 502)"],
@@ -277,39 +278,33 @@ const DICTS = [
   ["q", "qamoos", "al-Qāmūs al-Muḥīṭ", "al-Fīrūzābādī (d. 817)"],
   ["b", "basair-tamyeez", "Baṣāʾir Dhawī al-Tamyīz", "al-Fīrūzābādī (d. 817)"],
   ["u", "umdah-alhufadh", "ʿUmdat al-Ḥuffāẓ", "al-Samīn al-Ḥalabī (d. 756)"],
-  ["i", "ishtiqaqi", "al-Muʿjam al-Ishtiqāqī", "Muḥammad Ḥasan Jabal (d. 2015), on tafsir.app only"],
+  ["i", "ishtiqaqi", "al-Muʿjam al-Ishtiqāqī", "Muḥammad Ḥasan Jabal (d. 2015)"],
 ];
-const DICT = new Map();
-const dictOf = (r) => { if (!DICT.has(r)) DICT.set(r, json(`data/dict/${encodeURIComponent(r)}.json`).catch(() => { DICT.delete(r); return null; })); return DICT.get(r); };
-function coreHTML(c, r, list = false) {
-  const gist = c ? ["en", "ur"].filter((l) => c[l] && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !c.ur)))
-    .map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(c.ur)}</div>` : `<div><strong>${esc(c.en)}</strong></div>`).join("") : "";
-  if (list) {
-    const pick = raw.get("dict", "m");
-    const from = [...new Set((c?.q || []).map(([k]) => DICTS.find((x) => x[0] === k)?.[2]))].filter(Boolean);
-    return `<div class="eyebrow">Root meaning</div>${gist}${from.length ? `<div class="note">Summed up from ${from.map(esc).join(" and ")} (the words used are marked in ${from.length > 1 ? "their entries" : "its entry"})</div>` : ""}
-      <label class="dpick"><span class="note">Dictionary</span><select data-dict>${DICTS.map(([k, , name, by]) => `<option value="${k}" ${k === pick ? "selected" : ""}>${esc(name)}${k === "i" ? " (link)" : ""}</option>`).join("")}</select></label>
-      <div class="entry" data-entry dir="rtl"><span class="note" dir="ltr">Loading…</span></div>`;
-  }
+const MEANS = new Map();
+const rootOf = (r) => { if (!MEANS.has(r)) MEANS.set(r, json(`data/root/${encodeURIComponent(r)}.json`).catch(() => { MEANS.delete(r); return {}; })); return MEANS.get(r); };
+// English and/or Urdu, following the reader's meaning switch
+const gistHTML = (en, ur) => ["en", "ur"].filter((l) => (l === "en" ? en : ur) && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !ur)))
+  .map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(ur)}</div>` : `<div><strong>${esc(en)}</strong></div>`).join("");
+function coreHTML(c, r) {
   if (!c) return "";
   const quotes = (c.q || []).map(([k, t, form]) =>
     `<div class="q"><span class="ar" dir="rtl">${esc(t)}</span> <a class="note" href="https://tafsir.app/${BOOKS[k][0]}/${encodeURIComponent(form)}" target="_blank" rel="noopener">${BOOKS[k][1]}</a></div>`).join("");
-  return `<div class="eyebrow">Root meaning</div>${gist}${quotes}`;
+  return `<div class="eyebrow">Root meaning</div>${gistHTML(c.en, c.ur)}${quotes}`;
 }
-// the chosen dictionary's whole entry for the root, with the phrase quoted above it marked
-function entryHTML(d, c, r, k) {
-  const [, src, name, by] = DICTS.find((x) => x[0] === k) || DICTS[0];
-  const link = (w) => `<span class="note">${esc(by.replace(/, on.*/, ""))} · </span><a class="note" dir="ltr" href="https://tafsir.app/${src}/${encodeURIComponent(w)}" target="_blank" rel="noopener">${esc(name)} on tafsir.app</a>`;
-  if (k === "i") return `<p class="note" dir="ltr">${esc(name)} by ${esc(by.replace(/, on.*/, ""))} is a modern book still under copyright, so its entry is not copied into this app.</p><div dir="ltr">${link((d && d.w) || r)}</div>`;
-  const parts = [];
-  for (const [root, e] of [[r, d], ...Object.entries((d && d.x) || {})]) {
-    const t = e && e[k];
-    if (!t) continue;
-    let h = esc(t);
-    for (const [qk, q, form] of (c && c.q) || []) if (qk === k && (root === r || form === root)) h = h.replace(esc(q), `<mark>${esc(q)}</mark>`);
-    parts.push(`${root !== r ? `<div class="note" dir="ltr">Also under the root <span class="ar">${esc(spaced(root))}</span>:</div>` : ""}<div class="ar">${h.replace(/\n+/g, "<br>")}</div>`);
-  }
-  return (parts.length ? parts.join("") : `<p class="note" dir="ltr">${esc(name)} has no entry for this root.</p>`) + `<div dir="ltr">${link((d && d.w) || r)}</div>`;
+// the word card's root meaning: a dictionary list, and the chosen dictionary's meaning in English and Urdu
+function rootHTML(d, r, k) {
+  const ks = DICTS.filter(([x]) => d[x] || x === "i").map(([x]) => x);
+  if (!ks.includes(k)) k = ks[0];
+  const [, src, name, by] = DICTS.find((x) => x[0] === k);
+  const [en, ur, t, form] = d[k] || [];
+  const link = `<a class="note" href="https://tafsir.app/${src}/${encodeURIComponent(form || r)}" target="_blank" rel="noopener">full entry on tafsir.app</a>`;
+  const body = k === "i"
+    ? `<p class="note">${esc(name)} is a modern book still under copyright, so it is not copied into this app. Read its entry on tafsir.app.</p><div>${link}</div>`
+    : `${gistHTML(en, ur)}<div class="q"><span class="ar" dir="rtl">${esc(t)}</span></div>
+       <div class="note">${esc(by)}, ${esc(name)}${form && form !== r ? `, under <span class="ar">${esc(spaced(form))}</span>` : ""} · ${link}</div>`;
+  return `<div class="eyebrow">Root meaning</div>
+    <label class="dpick"><span class="note">Dictionary</span><select data-dict>${ks.map((x) => { const n = DICTS.find((y) => y[0] === x)[2];
+      return `<option value="${x}" ${x === k ? "selected" : ""}>${esc(n)}${x === "i" ? " (link)" : ""}</option>`; }).join("")}</select></label>${body}`;
 }
 function sheetHTML(w, idx) {
   const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
@@ -354,14 +349,9 @@ function readingClick(e, idx) {
     const box = $("#sheetbox .core");
     if (box) {
       const r = box.dataset.root;
-      Promise.all([core(), dictOf(r)]).then(([cs, d]) => {
+      rootOf(r).then((d) => {
         if (!box.isConnected) return;
-        box.innerHTML = coreHTML(cs[r], r, true);
-        const has = (k) => !!(d && (d[k] || Object.values(d.x || {}).some((e) => e[k])));
-        const sel = box.querySelector("[data-dict]");
-        // the chosen dictionary may have no entry for this root: show the first one that has
-        if (!has(sel.value) && sel.value !== "i") { const k = DICTS.find(([k]) => has(k))?.[0]; if (k) sel.value = k; }
-        const show = () => { box.querySelector("[data-entry]").innerHTML = entryHTML(d, cs[r], r, sel.value); };
+        const show = () => { box.innerHTML = rootHTML(d, r, raw.get("dict", "m")); };
         box.onchange = (e) => { if (e.target.dataset.dict !== undefined) { raw.set("dict", e.target.value); show(); } };
         show();
       });
@@ -867,7 +857,7 @@ function about() {
       <p><strong>Your progress</strong>: each sūrah shows how far its words have moved toward known, and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
     <div class="card">
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device, in the profile you are using.</p>
-    <p class="note">Root meanings on the word card come from the classical dictionaries: Maqāyīs al-Lugha (Ibn Fāris), al-Mufradāt (al-Rāghib al-Iṣfahānī), Lisān al-ʿArab (Ibn Manẓūr), al-Ṣiḥāḥ (al-Jawharī), al-Qāmūs al-Muḥīṭ and Baṣāʾir Dhawī al-Tamyīz (al-Fīrūzābādī) and ʿUmdat al-Ḥuffāẓ (al-Samīn al-Ḥalabī). Their entries are copied word for word from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī) and stored in the app. Choose a dictionary in the list on the word card. al-Muʿjam al-Ishtiqāqī (Muḥammad Ḥasan Jabal) is still under copyright, so it is linked rather than copied. The English and Urdu line above each entry is a translation of the dictionaries, made with AI help.</p>
+    <p class="note">Root meanings on the word card come from the classical dictionaries: Maqāyīs al-Lugha (Ibn Fāris), al-Mufradāt (al-Rāghib al-Iṣfahānī), Lisān al-ʿArab (Ibn Manẓūr), al-Ṣiḥāḥ (al-Jawharī), al-Qāmūs al-Muḥīṭ and Baṣāʾir Dhawī al-Tamyīz (al-Fīrūzābādī) and ʿUmdat al-Ḥuffāẓ (al-Samīn al-Ḥalabī). Choose a dictionary in the list on the word card and its meaning for the root shows in English and Urdu, with the phrase from its entry that the meaning rests on. The phrases are copied word for word from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī), which also has each full entry. The English and Urdu are translations of the dictionaries, made with AI help. al-Muʿjam al-Ishtiqāqī (Muḥammad Ḥasan Jabal) is still under copyright, so it is linked rather than quoted.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <p class="note">Version ${VERSION_NO}. <button class="btn" id="upd">Check for update</button> <span class="note" id="updmsg"></span></p>
     <p><a class="btn" href="#/profile">Profiles and clearing progress</a></p>`;

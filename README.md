@@ -29,7 +29,7 @@ python3 -m http.server 8000
 - `glosses/` – word and āyah meanings, one file per sūrah (format in `glosses/README.md`).
 - `data/` – generated JSON the app loads, including `data/index/` for the word search. Rebuild after changing sources or glosses:
 
-Dictionary entries (`data/dict/ROOT.json`) and the root summaries (`data/core.json`) are built from entries fetched from tafsir.app with `tools/build_dict.py` and `tools/build_core.py` (word shapes for progress: `tools/build_shapes.py`).
+Each dictionary's root meaning in English and Urdu (`data/root/ROOT.json`) and the main root summaries (`data/core.json`) are built from entries fetched from tafsir.app with `tools/build_dict.py` and `tools/build_core.py` (word shapes for progress: `tools/build_shapes.py`).
 
 ```sh
 python3 tools/build_data.py
