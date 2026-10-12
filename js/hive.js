@@ -191,20 +191,23 @@ export async function renderHive(app) {
   const toPick = () => { Object.assign(g, { mode: "pick", cur: null, path: [], res: [], active: null, gain: null, last: null, R: 2 }); draw(); };
 
   // ---------- team race ----------
-  // Two teams, one screen, a honeycomb with a hidden word in every cell, showing only its first letter. Team A builds from the
-  // right edge to the left, Team B from the left edge to the right. Teams take turns choosing a cell on
-  // their starting edge or touching their own cells. A right answer claims the cell; a wrong one turns
-  // it white and hides a new word in it, so the cell stays free and the missed word is not given away.
-  // No team may hold three cells in a straight row, so routes have to bend. A team may also try to steal
-  // an enemy cell touching its own, answering a fresh word for it, so no route is ever safe.
-  // The first team whose cells join its two edges wins.
+  // Two teams, one screen, a honeycomb with a hidden word in every cell, showing only its first letter.
+  // Team A builds from the right edge to the left, Team B from the top edge to the bottom, so the routes
+  // must cross. Teams take turns choosing a cell on their starting edge or touching their own cells.
+  // A right answer claims the cell; a wrong one turns it white and hides a new word in it, so the cell
+  // stays free and the missed word is not given away. No team may hold three cells in a straight line
+  // along its way, so routes have to bend. A team may also try to steal an enemy cell touching its own,
+  // answering a fresh word for it, so no route is ever safe. The first team to join its two edges wins.
   const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
   const names = () => store.get("teamNames", TEAMS.map((x) => x.name));
   // A hexagon of 37 cells, seven across the middle row; each row's end cells make up the side edges.
   const TR = 3;
   const board0 = () => comb(TR).map((c) => ({ ...c, k: c.r + "," + c.q, row: c.r, col: c.q }));
-  const START = [(c) => c.rightEnd, (c) => c.leftEnd], GOAL = [START[1], START[0]];
-  const ROUTE = ["right → left", "left → right"], EDGE = ["the right edge", "the left edge"];
+  // Team A crosses from the right side to the left side (the ends of the five middle rows), Team B from the
+  // top row to the bottom row, so their routes must cross and block each other (Prince, 2026-10-12).
+  const side = (c) => Math.abs(c.row) < TR;
+  const START = [(c) => c.rightEnd && side(c), (c) => c.row === -TR], GOAL = [(c) => c.leftEnd && side(c), (c) => c.row === TR];
+  const ROUTE = ["right → left", "top → bottom"], EDGE = ["the right edge", "the top edge"];
   const near = (c) => [[0, -1], [0, 1], [-1, 0], [-1, 1], [1, 0], [1, -1]].map(([dr, dc]) => c.row + dr + "," + (c.col + dc));
   function match() {
     const cells = board0();
@@ -224,23 +227,25 @@ export async function renderHive(app) {
     const order = [...cells].sort((a, b) => a.row - b.row || b.col - a.col);
     const first = store.get("teamFirst", 0); store.set("teamFirst", 1 - first); // the first move helps, so the teams take it in turn
     const board = new Map(order.map((c, i) => [c.k, { c, no: i + 1, w: list[i], own: null, white: false }]));
-    return { srcKey, board, spare: list.slice(cells.length), ready: false, turn: first, first, final: false, pick: null, opts: [], last: null, over: null, fresh: true,
+    return { srcKey, board, spare: list.slice(cells.length), ready: false, turn: first, first, pick: null, opts: [], last: null, over: null, fresh: true,
       teams: TEAMS.map((x, i) => ({ ...x, name: names()[i] || x.name, right: 0, missed: [], route: [] })) };
   }
-  // would taking this cell give the team three of its cells side by side in one row?
-  const straight = (ti, c) => {
-    const mine = (col) => t.board.get(c.row + "," + col)?.own === ti;
+  // would taking this cell give the team three of its cells in a straight line along its way across?
+  // Team A may not run three side by side in a row; Team B may not run three down one diagonal.
+  const LINES = [[[0, 1]], [[1, 0], [1, -1]]];
+  const straight = (ti, c) => LINES[ti].some(([dr, dc]) => {
+    const mine = (k) => t.board.get(c.row + k * dr + "," + (c.col + k * dc))?.own === ti;
     let run = 1;
-    for (let col = c.col - 1; mine(col); col--) run++;
-    for (let col = c.col + 1; mine(col); col++) run++;
+    for (let k = -1; mine(k); k--) run++;
+    for (let k = 1; mine(k); k++) run++;
     return run >= 3;
-  };
+  });
   // A team grows from the head of its route: the cells touching the last cell it took, free ones or
   // the other team's (a steal), never one that makes three in a row. If the head is boxed in, the route
   // backs up to the latest cell that still has a way on; with no route yet, the team picks on its edge
   // (or, walled in completely, anywhere free).
   const legal = (ti) => {
-    const ok = (x) => x && !straight(ti, x.c) && (x.own === null || (x.own === 1 - ti && !t.final)); // no steals on the last turn
+    const ok = (x) => x && !straight(ti, x.c) && (x.own === null || x.own === 1 - ti);
     const route = t.teams[ti].route.filter((k) => t.board.get(k).own === ti);
     for (let i = route.length - 1; i >= 0; i--) {
       const next = near(t.board.get(route[i]).c).map((k) => t.board.get(k)).filter(ok);
@@ -281,6 +286,9 @@ export async function renderHive(app) {
         return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
       }).join("");
       t.fresh = false;
+      // each team's two edges in its colour: Team A on the sides, Team B along the top and bottom rows
+      const W = (2 * TR + 1) * sx - 3, H = 2 * TR * sy + h, mid = `top:${sy}px;height:${H - 2 * sy}px`, row = `left:${(TR / 2) * sx}px;width:${W - TR * sx}px`;
+      const edges = `<i class="edge a" style="right:-14px;${mid}"></i><i class="edge a" style="left:-14px;${mid}"></i><i class="edge b" style="top:-14px;${row}"></i><i class="edge b" style="bottom:-14px;${row}"></i>`;
       const held = (ti) => [...t.board.values()].filter((x) => x.own === ti).length;
       const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)} <span class="note">${ROUTE[ti]}</span></strong>
           <span class="note">${held(ti)} cell${held(ti) === 1 ? "" : "s"} · ${tm.missed.length} wrong</span></div>`).join("");
@@ -288,22 +296,22 @@ export async function renderHive(app) {
       let panel;
       if (!t.ready) {
         panel = `<div><strong>Name the teams</strong></div><div class="names">${t.teams.map((tm, i) => `<label class="team t${tm.cls}">Team ${i + 1}<input id="tn${i}" maxlength="20" value="${esc(tm.name)}" autocomplete="off"></label>`).join("")}</div>
-          <div class="note">Each cell hides a word. ${esc(t.teams[0].name)} builds from the right edge to the left, ${esc(t.teams[1].name)} from the left edge to the right. Each cell shows the first letter of its word. Take turns choosing a cell: first on your starting edge, then touching the last cell you took; answer right to take it, while a wrong answer turns it white with a new hidden word. You may not hold three cells side by side in one row. You may also steal a cell of the other team next to your last cell by answering a new word for it. First to join both edges wins; if the team that went first gets there, the other team has one last turn, and joining its edges too makes it a draw. ${esc(t.teams[t.turn].name)} goes first.</div>
+          <div class="note">Each cell hides a word. ${esc(t.teams[0].name)} builds from the right edge to the left, ${esc(t.teams[1].name)} from the top edge to the bottom, so your routes must cross. Each cell shows the first letter of its word. Take turns choosing a cell: first on your starting edge, then touching the last cell you took; answer right to take it, while a wrong answer turns it white with a new hidden word. ${esc(t.teams[0].name)} may not hold three cells side by side in one row, and ${esc(t.teams[1].name)} not three down one slant. You may also steal a cell of the other team next to your last cell by answering a new word for it. First to join both its edges wins. ${esc(t.teams[t.turn].name)} goes first.</div>
           <button class="btn primary" id="tgo">Start the match</button>`;
       } else if (t.over) {
         const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
         panel = `${last}<h2 style="margin:4px 0">${t.over}</h2>${missed}<button class="btn honey" id="tnew">New match</button>`;
       } else if (t.pick === null) {
-        panel = `${last}${t.final ? `<div><strong>${esc(t.teams[1 - t.turn].name)}</strong> has joined both edges. Last turn for <strong>${esc(cur.name)}</strong>: reach your edge to draw the match.</div>` : ""}<div>Turn: <strong>${esc(cur.name)}</strong></div><div class="note">Choose a glowing cell${[...t.board.values()].some((x) => x.own === t.turn) ? `, next to your last cell${t.final ? "" : ", or steal a marked cell of the other team"}` : ` on ${EDGE[t.turn]}`}.</div>`;
+        panel = `${last}<div>Turn: <strong>${esc(cur.name)}</strong></div><div class="note">Choose a glowing cell${[...t.board.values()].some((x) => x.own === t.turn) ? ", next to your last cell, or steal a marked cell of the other team" : ` on ${EDGE[t.turn]}`}.</div>`;
       } else {
         const w = t.pickW, ur = lang() === "ur";
         panel = `<div class="note">${esc(cur.name)} · ${cellName(t.board.get(t.pick))}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
           <div class="opts">${t.opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}" data-to="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
       }
-      app.innerHTML = `${head(playing, "Two teams build opposite ways across the honeycomb. Choose a cell by its first letter, answer its word, and take it, or steal one.")}
+      app.innerHTML = `${head(playing, "Team A builds right to left, Team B top to bottom, so the routes cross. Choose a cell by its first letter, answer its word, and take it, or steal one.")}
         <div class="teams">${score}</div>
         <div class="row" style="justify-content:center"><button class="btn" id="tnew">${t.over ? "Play again" : "New match"}</button></div>
-        <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * TR + 1) * sx - 3}px;height:${2 * TR * sy + h}px">${cells}</div>
+        <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * TR + 1) * sx - 3}px;height:${2 * TR * sy + h}px">${edges}${cells}</div>
         <section class="card quiz">${panel}</section>${CREDIT}`;
     };
     const nextTurn = () => {
@@ -332,13 +340,7 @@ export async function renderHive(app) {
         t.pick = null; t.last = { ok, w, no: cellName(x), who: cur.name, steal, owner: steal ? t.teams[x.own].name : "" };
         if (ok) { x.own = t.turn; x.w = w; cur.right++; cur.route.push(x.c.k); }
         else { cur.missed.push(w); if (!steal) { x.white = true; x.w = t.spare.pop() || distract[Math.floor(Math.random() * distract.length)]; } }
-        if (t.final) t.over = ok && joined(t.turn) ? "Both teams joined their edges. It's a draw!" : `Winner: ${esc(t.teams[1 - t.turn].name)}`;
-        else if (ok && joined(t.turn)) {
-          // the team that went first has had one more turn, so the other team gets a last turn to draw level
-          t.final = t.turn === t.first;
-          if (t.final && legal(1 - t.turn).size) t.turn = 1 - t.turn;
-          else t.over = `Winner: ${esc(cur.name)}`;
-        }
+        if (ok && joined(t.turn)) t.over = `Winner: ${esc(cur.name)}`; // the routes cross, so only one team can ever join its edges
         else nextTurn();
         return tdraw();
       }
