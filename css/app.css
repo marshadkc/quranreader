@@ -27,9 +27,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 
 /* top bar: brand and main links on wide screens; links become a bottom bar on phones */
 .top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
-.brand{font-weight:600;text-decoration:none;color:var(--ink);white-space:nowrap}
+.brand{font-weight:600;text-decoration:none;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .menu{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:14px}
-.jar{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--honey-deep);font-variant-numeric:tabular-nums}
+.who{flex-shrink:0;margin-left:auto;margin-right:12px;font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who::before{content:"👤 "}
+.jar{display:flex;align-items:center;gap:6px;color:var(--honey-deep);font-variant-numeric:tabular-nums}
 .drop{display:inline-block;width:14px;height:16px;background:var(--honey);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
 .tabs{display:flex;gap:4px}
 .tabs a{text-decoration:none;color:var(--muted);font-size:14px;padding:6px 10px;border-radius:8px;white-space:nowrap}
@@ -251,6 +253,7 @@ h1 small.note{font-size:14px;font-weight:400}
 .hex.white{background:var(--line)}.hex.white > span{background:#fff;color:#555}
 .teams{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
 .team{border:2px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.edge{position:absolute;border-radius:6px;opacity:.85}.edge.a{width:7px;background:var(--honey-deep)}.edge.b{height:7px;background:var(--part)}
 .team.ta{border-color:var(--honey-deep)}.team.tb{border-color:var(--part)}
 .team.now{box-shadow:0 0 0 3px var(--accent)}
 .names{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
@@ -259,3 +262,17 @@ h1 small.note{font-size:14px;font-weight:400}
 .hex.steal{cursor:pointer;background:var(--bad);animation:glow 1.4s ease-in-out infinite}
 
 .how ol{padding-left:22px;display:flex;flex-direction:column;gap:6px;margin:8px 0}.how h2{margin:0 0 6px;font-size:18px}
+
+.profiles{list-style:none;padding:0;margin:0 0 12px;display:flex;flex-direction:column;gap:8px}
+.profiles li{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.profiles li.on{border-color:var(--accent)}
+#addp input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+@media (max-width:440px){.brand{font-size:14px}.who{margin-right:8px;padding:3px 8px}}
+/* wide screens: the word card and its root meanings sit in a right-hand column beside the āyāt */
+@media (min-width:1280px){
+  .wrap:has(#sheetbox){width:calc(100% - 400px);margin:0 400px 0 auto}
+  #sheetbox{position:fixed;top:70px;right:16px;bottom:auto;width:370px}
+  #sheetbox:empty{display:block;border:1px dashed var(--line);border-radius:12px;padding:14px;color:var(--muted);font-size:14px}
+  #sheetbox:empty::before{content:"Tap any word to see its meaning, word parts, root and deep meaning here."}
+  #sheetbox .sheet{max-height:calc(100vh - 90px)}
+}

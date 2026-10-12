@@ -6,10 +6,22 @@ const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
 
 // ---------- storage (works without localStorage, e.g. private windows) ----------
-export const store = {
+// Progress belongs to a profile, so a teacher can test a class under its own profile and clear it without
+// touching their own. The first profile keeps the original keys; others are stored under "qwr.p.<id>.".
+const raw = {
   get(k, d) { try { const v = localStorage.getItem("qwr." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem("qwr." + k, JSON.stringify(v)); } catch { /* ignore */ } },
   del(k) { try { localStorage.removeItem("qwr." + k); } catch { /* ignore */ } },
+};
+const MINE = /^(shape|level|honey|lastPrac|hiveSrc|hiveScope|upto\.\d+|prac\.\d+)$/;
+export const profiles = { list: () => raw.get("profiles", [{ id: "", name: "Me" }]), active: () => raw.get("profile", "") };
+const scoped = (k) => { const id = profiles.active(); return id && MINE.test(k) ? `p.${id}.${k}` : k; };
+export const store = { get: (k, d) => raw.get(scoped(k), d), set: (k, v) => raw.set(scoped(k), v), del: (k) => raw.del(scoped(k)) };
+// every stored key of a profile, to clear or delete it
+const profileKeys = (id) => {
+  const out = [];
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i).slice(4); if (id ? k.startsWith(`p.${id}.`) : MINE.test(k)) out.push(k); } } catch { /* ignore */ }
+  return out;
 };
 
 export const state = {
@@ -39,6 +51,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
+const VERSION_NO = 23; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -805,19 +818,69 @@ function about() {
       <p><strong>Honeycomb</strong>: answer words to fill a path across the comb and collect honey. <em>Two teams</em> plays a race on one screen for a class.</p>
       <p><strong>Your progress</strong>: each sūrah shows how far its words have moved toward known, and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
     <div class="card">
-    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device.</p>
+    <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device, in the profile you are using.</p>
     <p class="note">Root meanings on the word card quote the classical dictionaries word for word: Lisān al-ʿArab (Ibn Manẓūr), Maqāyīs al-Lugha (Ibn Fāris) and al-Mufradāt (al-Rāghib al-Iṣfahānī), from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī). The English and Urdu line above each quote is a translation of it, made with AI help.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
-    <button class="btn" id="reset">Clear my progress</button><span class="note" id="resetmsg"></span>`;
-  app.onclick = (e) => {
-    if (e.target.id !== "reset") return;
-    if (e.target.dataset.sure) { state.level = {}; store.set("shape", {}); store.del("level"); state.honey = 0; store.set("honey", 0); $("#jar").textContent = 0; $("#resetmsg").textContent = " Progress cleared."; delete e.target.dataset.sure; e.target.textContent = "Clear my progress"; }
-    else { e.target.dataset.sure = "1"; e.target.textContent = "Tap again to clear everything"; }
+    <p class="note">Version ${VERSION_NO}. <button class="btn" id="upd">Check for update</button> <span class="note" id="updmsg"></span></p>
+    <p><a class="btn" href="#/profile">Profiles and clearing progress</a></p>`;
+  app.onclick = async (e) => {
+    if (e.target.id !== "upd") return;
+    $("#updmsg").textContent = "Checking…";
+    const reg = await navigator.serviceWorker?.getRegistration?.().catch(() => null);
+    await reg?.update().catch(() => {});
+    if (reg?.installing || reg?.waiting) { $("#updmsg").textContent = "Updating…"; return; } // the new version reloads the page when ready
+    $("#updmsg").textContent = "You have the latest version.";
   };
 }
 
+// ---------- profiles ----------
+// Each profile keeps its own progress and honey on this device. A teacher can test a class under a class
+// profile and clear it after the lesson without touching their own progress.
+function profilePage() {
+  const list = profiles.list(), cur = profiles.active();
+  const draw = (msg = "") => {
+    app.innerHTML = `<h1>Profiles</h1>
+      <div class="card"><p>Each profile keeps its own progress and honey on this device. Use one for yourself and one for each class, and clear a class profile after a lesson without losing your own progress.</p></div>
+      <ul class="profiles">${profiles.list().map((p) => `<li class="card${p.id === cur ? " on" : ""}">
+        <div><strong>${esc(p.name)}</strong>${p.id === cur ? ` <span class="note">· in use</span>` : ""}</div>
+        <div class="row">${p.id === cur ? "" : `<button class="btn" data-use="${esc(p.id)}">Use</button>`}
+          <button class="btn" data-ren="${esc(p.id)}">Rename</button>
+          <button class="btn" data-clr="${esc(p.id)}">Clear progress</button>
+          ${p.id && p.id !== cur ? `<button class="btn" data-del="${esc(p.id)}">Delete</button>` : ""}</div></li>`).join("")}</ul>
+      <form class="row" id="addp"><input id="pname" maxlength="24" placeholder="New profile name, e.g. Class 5B" autocomplete="off"><button class="btn honey">Add profile</button></form>
+      <p class="note" id="pmsg">${esc(msg)}</p>`;
+  };
+  const save = (l) => raw.set("profiles", l);
+  const use = (id) => { raw.set("profile", id); location.hash = "#/"; location.reload(); };
+  app.onsubmit = (e) => {
+    e.preventDefault();
+    const name = $("#pname").value.trim(); if (!name) return;
+    const l = profiles.list(), id = Date.now().toString(36);
+    l.push({ id, name }); save(l); use(id);
+  };
+  app.onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const l = profiles.list(), d = b.dataset;
+    if (d.use !== undefined) return use(d.use);
+    if (d.ren !== undefined) {
+      const p = l.find((x) => x.id === d.ren), name = (prompt("Profile name", p.name) || "").trim().slice(0, 24);
+      if (name) { p.name = name; save(l); profileChip(); draw(); }
+      return;
+    }
+    const id = d.clr ?? d.del; if (id === undefined) return;
+    const name = l.find((x) => x.id === id).name;
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = d.clr !== undefined ? "Tap again to clear" : "Tap again to delete"; return; }
+    profileKeys(id).forEach((k) => raw.del(k));
+    if (d.del !== undefined) { save(l.filter((x) => x.id !== id)); return draw(`${name} deleted.`); }
+    if (id === cur) { state.level = {}; state.honey = 0; raw.set(scoped("shape"), {}); $("#jar").textContent = 0; }
+    draw(`${name}: progress cleared.`);
+  };
+  draw();
+}
+const profileChip = () => { const p = profiles.list().find((x) => x.id === profiles.active()) || profiles.list()[0]; $("#who").textContent = p.name; };
+
 // ---------- router ----------
-const TABS = { search: "search", word: "search", ayah: "search", parts: "parts", hive: "hive", about: "about" };
+const TABS = { search: "search", word: "search", ayah: "search", parts: "parts", hive: "hive", about: "about", profile: "about" };
 async function route() {
   const h = location.hash.replace(/^#\/?/, "").split("/").map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
   const tab = TABS[h[0]] || (h[0] === "s" ? "" : "home");
@@ -837,6 +900,7 @@ async function route() {
     else if (h[0] === "parts") await parts();
     else if (h[0] === "hive") await renderHive(app);
     else if (h[0] === "about") about();
+    else if (h[0] === "profile") profilePage();
     else await home();
   } catch (err) {
     app.innerHTML = `<div class="banner">This page couldn't load (${esc(err.message)}). Check your connection and try again.</div>`;
@@ -844,8 +908,18 @@ async function route() {
   if (!anchored) window.scrollTo(0, 0);
 }
 $("#jar").textContent = state.honey;
+profileChip();
 addEventListener("hashchange", route);
 sidebar().catch(() => {});
 migrateLevels().catch(() => (state.level ||= {})).then(route);
 
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+// A new version takes over as soon as it is installed (sw.js skips waiting); reload once so the page runs it.
+// Installed apps on phones are often resumed rather than reopened, so look for an update whenever the app comes back.
+if ("serviceWorker" in navigator) {
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").then((reg) => {
+    addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (had && !reloaded) { reloaded = true; location.reload(); } });
+}
