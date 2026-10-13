@@ -1,5 +1,5 @@
-"""Build data/dict/ROOT.json: each Quran root's full entry in the classical dictionaries, for the
-dictionary list on the word card.
+"""Build tools/dict/ROOT.json: each Quran root's full entry in the classical dictionaries. These are the
+sources that tools/build_core.py checks every quoted phrase against (the app itself does not load them).
 
 Inputs: raw JSON files fetched from tafsir.app (get_word.php?src=SOURCE&w=ROOT), each
 {root: {source: {"w": form looked up, "data": entry text}}}. tafsir.app answers with the nearest entry
@@ -37,8 +37,9 @@ raw = {}
 for f in sys.argv[1:]:
     for root, rec in json.load(open(f)).items():
         for src, e in rec.items():
-            raw.setdefault(root, {})[src] = e
-os.makedirs("data/dict", exist_ok=True)
+            if (e.get("data") or "") or src not in raw.get(root, {}):  # an empty answer never replaces an entry found under another spelling
+                raw.setdefault(root, {})[src] = e
+os.makedirs("tools/dict", exist_ok=True)
 n = kept = 0
 for root in raw:
     out, form = {}, None
@@ -60,7 +61,7 @@ for root in raw:
         out["x"] = x
     if out:
         out["w"] = form or root
-        json.dump(out, open(f"data/dict/{root}.json", "w"), ensure_ascii=False, separators=(",", ":"))
+        json.dump(out, open(f"tools/dict/{root}.json", "w"), ensure_ascii=False, separators=(",", ":"))
         n += 1
         kept += sum(k in out for k in KEYS.values())
 print(n, "roots,", kept, "entries")

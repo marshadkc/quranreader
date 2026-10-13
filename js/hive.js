@@ -159,6 +159,7 @@ export async function renderHive(app) {
         else if (g.active === i) { cls = "active"; inner = `<span class="ar">${esc(t)}</span>`; }
         else if (i === next && g.active === null) { cls = "hid next"; tag = "button"; attrs = `data-cell="${i}" aria-label="Reveal word ${i + 1} of ${ws.length}"`; }
         else cls = "hid";
+        if (cls.startsWith("hid")) { inner = `<span class="no ar">${esc(initial(ws[i]))}</span>`; fs = cw * 0.3; } // the word's first letter, as on the team board
         if (g.fresh) { cls += " appear"; delay = `animation-delay:${i * 60}ms;`; }
       }
       return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
@@ -181,7 +182,7 @@ export async function renderHive(app) {
       panel = `${gain}${last}<div><strong style="color:var(--good)">${esc(cur.name)} ${cur.label} complete.</strong> ${right} of ${ws.length} words right.</div>
         ${cur.a.en || cur.a.ur ? `<div>${esc(cur.a.en || "")}</div><div class="ur">${esc(cur.a.ur || "")}</div>` : ""}<button class="btn honey" id="back">Next āyah</button>`;
     }
-    app.innerHTML = `${head(busy, "Choose an āyah. Tap the glowing cell to see its word, then pick the meaning. Right answers fill with honey; wrong ones turn red.")}
+    app.innerHTML = `${head(busy, "Choose an āyah. Each cell shows its word's first letter; tap the glowing cell to see the word, then pick the meaning. Right answers fill with honey; wrong ones turn red.")}
       <div class="picker">${g.nums.map((p) => `<button class="nb${g.done.has(p.key) ? " won" : ""}" data-p="${esc(p.key)}" aria-pressed="${cur === p}" ${busy ? "disabled" : ""}><span dir="ltr">${esc(p.label)}</span></button>`).join("")}</div>
       <div class="row" style="justify-content:center"><button class="btn" id="deal" ${busy ? "disabled" : ""}>New āyāt</button>${g.combo >= 2 ? `<span class="note">Streak ${g.combo}${g.combo >= 5 ? " · double honey" : ""}</span>` : ""}</div>
       <div class="comb" id="comb" style="--cw:${cw}px;width:${(2 * R + 1) * sx - 3}px;height:${2 * R * sy + h}px">${cells}</div>
