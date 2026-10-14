@@ -94,8 +94,10 @@ h2{margin:0;font-size:18px;font-weight:600}
 .progress{display:flex;flex-direction:column;gap:6px}
 .progress .row{font-size:14px}
 .progress strong{font-variant-numeric:tabular-nums}
-.track{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.track{height:8px;border-radius:4px;background:var(--line);overflow:hidden;position:relative}
 .fill{height:100%;background:var(--accent);transition:width .4s}
+.track .fill{position:absolute;left:0;top:0}
+.fill.way,.mini i.way{opacity:.35}
 
 /* surah list */
 .list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
@@ -105,8 +107,8 @@ h2{margin:0;font-size:18px;font-weight:600}
 .list .name{min-width:0}
 .list .name small{display:block;color:var(--muted);font-size:12px}
 .list .arname{font-family:var(--f-ar);font-size:22px;direction:rtl}
-.mini{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px}
-.mini i{display:block;height:100%;background:var(--accent)}
+.mini{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px;position:relative}
+.mini i{display:block;height:100%;background:var(--accent);position:absolute;left:0;top:0}
 
 /* reader */
 .verses{display:flex;flex-direction:column;gap:12px}
