@@ -137,10 +137,17 @@ const spaced = (r) => [...r].join(" ");
 const keyLabel = (k) => (k.startsWith("=") ? k.slice(1) : spaced(k));
 
 // Progress: every right answer (or "I know this") moves a word shape one step up, and three steps make it known.
-// A sūrah's progress is the steps its words have made out of all possible steps, so it grows with each answer;
-// a word learned anywhere counts wherever that same shape occurs.
+// The percent shown is the share of words known, so it always agrees with the "N of M words known" count.
+// The lighter part of the bar is every step made so far (out of three per word), so it grows with each answer.
+// A word learned anywhere counts wherever that same shape occurs.
 const pctOf = (x) => (x >= 99.95 ? 100 : x >= 10 || x === 0 ? Math.round(x) : Math.round(x * 10) / 10);
-const progressOf = (ws) => (ws.length ? pctOf((ws.reduce((t, w) => t + lv(w), 0) / (3 * ws.length)) * 100) : 0);
+const share = (part, whole) => (whole ? pctOf((part / whole) * 100) : 0);
+function progressOf(ws) {
+  let known = 0, learning = 0, steps = 0;
+  for (const w of ws) { const k = lv(w); steps += k; if (k >= 3) known++; else if (k) learning++; }
+  return { known, learning, pct: share(known, ws.length), way: share(steps, 3 * ws.length) };
+}
+const barHTML = (p, id = "") => `<div class="fill way"${id ? ` id="${id}way"` : ""} style="width:${p.way}%"></div><div class="fill"${id ? ` id="${id}"` : ""} style="width:${p.pct}%"></div>`;
 // where each word shape occurs, so the home page can show every sūrah's progress without loading them all
 let SHAPES = null;
 const shapes = () => (SHAPES ||= json("data/index/shapes.json").then((d) => {
@@ -149,14 +156,15 @@ const shapes = () => (SHAPES ||= json("data/index/shapes.json").then((d) => {
   return m;
 }).catch(() => { SHAPES = null; return new Map(); }));
 async function quranProgress(idx) {
-  const m = await shapes(), per = new Map();
-  let all = 0;
+  const m = await shapes(), steps = new Map(), known = new Map();
+  const add = (map, n, x) => map.set(n, (map.get(n) || 0) + x);
   for (const [key, k] of Object.entries(state.level)) {
     if (!k) continue;
-    for (const [n, c] of m.get(key) || []) { per.set(n, (per.get(n) || 0) + k * c); all += k * c; }
+    for (const [n, c] of m.get(key) || []) { add(steps, n, k * c); add(steps, 0, k * c); if (k >= 3) { add(known, n, c); add(known, 0, c); } }
   }
   const total = idx.surahs.reduce((t, s) => t + s.words, 0);
-  return { all: pctOf((all / (3 * total)) * 100), surah: (n) => pctOf(((per.get(n) || 0) / (3 * idx.surahs[n - 1].words)) * 100) };
+  const of = (n, words) => ({ pct: share(known.get(n) || 0, words), way: share(steps.get(n) || 0, 3 * words) });
+  return { all: of(0, total), surah: (n) => of(n, idx.surahs[n - 1].words) };
 }
 // Levels used to belong to the base word. Carry them over to that word's shapes in the sūrahs the learner
 // worked on (Al-Fātiḥah, Juz ʿAmma and any sūrah practised), so a new shape elsewhere still starts as new.
@@ -387,16 +395,16 @@ async function home() {
       <div class="eyebrow">Course · the whole Quran · 114 sūrahs · ${total.toLocaleString()} words</div>
       <h1>Read the Quran without a translation</h1>
       <p class="sub">Each word's meaning sits under it and fades as you learn it. Practise, and watch the page turn into plain Arabic. <a href="#/about">How to learn</a></p>
-      <div class="row"><span>Your progress through the Quran</span><strong>${p.all}%</strong></div>
-      <div class="track"><div class="fill" style="width:${p.all}%"></div></div>
+      <div class="row"><span>Words of the Quran you know</span><strong>${p.all.pct}%</strong></div>
+      <div class="track">${barHTML(p.all)}</div>
     </section>
-    <div class="row"><span class="note">Every right answer moves a word one step; three steps and it is known. A word you know counts wherever it occurs. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
+    <div class="row"><span class="note">Every right answer moves a word one step (the lighter bar); three steps and it is known. A word you know counts wherever it occurs. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
     <ul class="list">
       ${idx.surahs.map((s) => {
         const sp = p.surah(s.n);
         return `<li><a href="#/s/${s.n}"><span class="num">${s.n}</span>
-          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words.toLocaleString()} words${sp ? ` · ${sp}%` : ""}</small>
-          <span class="mini"><i style="width:${sp}%"></i></span></span>
+          <span class="name">${esc(s.en)} <small>${esc(s.meaning)} · ${s.ayahs} āyāt · ${s.words.toLocaleString()} words${sp.way ? ` · ${sp.pct}% known` : ""}</small>
+          <span class="mini"><i class="way" style="width:${sp.way}%"></i><i style="width:${sp.pct}%"></i></span></span>
           <span class="arname">${esc(s.ar)}</span></a></li>`;
       }).join("")}
     </ul>`;
@@ -407,9 +415,10 @@ async function reader(n, focus) {
   if (!meta) throw new Error(`there is no sūrah ${n}`);
   const d = await withMeanings(n), ws = allWords(d), ready = ws.some(hasMeaning);
   const prog = () => {
-    const pct = progressOf(ws), known = ws.filter((w) => lv(w) >= 3).length;
-    $("#prog").innerHTML = `<span>Your progress in this sūrah</span><strong>${pct}% · ${known.toLocaleString()} of ${ws.length.toLocaleString()} words known</strong>`;
-    $("#progfill").style.width = pct + "%";
+    const p = progressOf(ws);
+    $("#prog").innerHTML = `<span>Your progress in this sūrah${p.learning ? ` <small class="note">· ${p.learning.toLocaleString()} more on the way</small>` : ""}</span><strong>${p.pct}% · ${p.known.toLocaleString()} of ${ws.length.toLocaleString()} words known</strong>`;
+    $("#progfill").style.width = p.pct + "%";
+    $("#progfillway").style.width = p.way + "%";
   };
   view = { ws, sel: null, prog };
   app.innerHTML = `
@@ -417,7 +426,7 @@ async function reader(n, focus) {
       <div class="eyebrow">Sūrah ${n} · ${meta.ayahs} āyāt · ${meta.words.toLocaleString()} words</div>
       <div class="row"><h1>${esc(meta.en)} <small class="note">${esc(meta.meaning)}</small></h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
       <div class="row" id="prog"></div>
-      <div class="track"><div class="fill" id="progfill"></div></div>
+      <div class="track">${barHTML({ pct: 0, way: 0 }, "progfill")}</div>
     </section>
     <div class="row">${langHTML(ws)}
       ${ready ? `<span class="row"><a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a><a class="btn" href="#/s/${n}/roots">Root challenge</a></span>` : ""}</div>
@@ -685,7 +694,7 @@ async function practise(n, range) {
         <h2>${quit ? "Round stopped" : "Round complete"}</h2>
         <div class="big-score">${r.right} of ${asked}</div>
         <div class="note">right on the first try · āyāt ${opt.from}–${opt.to}${r.honey ? ` · <span class="pts">+${r.honey} honey</span>` : ""}</div>
-        <div class="note">Your progress in ${esc(d.en)}: <strong>${progressOf(allWords(d))}%</strong></div>
+        <div class="note">Words of ${esc(d.en)} you know: <strong>${progressOf(allWords(d)).pct}%</strong></div>
         ${missed.length ? `<div class="missed"><div class="note">Words to look at again</div>${missed.map((w) => `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>` : asked ? `<div class="note">No mistakes. Well done.</div>` : ""}
         <div class="btns"><button class="btn primary" id="again">Practise again</button>${opt.from > 1 ? `<a class="btn" href="#/s/${n}/practise/1-${opt.to}" id="widen">Review āyāt 1–${opt.to}</a>` : ""}<button class="btn" id="other">Choose other āyāt</button><a class="btn" href="#/s/${n}/${opt.from}">Back to the sūrah</a></div>
       </section>`;
@@ -857,7 +866,7 @@ function about() {
       <p><strong>Practise this sūrah</strong> (or <em>Practise āyāt X–Y</em> under any āyah): choose the āyāt and how many words, then pick each word's meaning. Every right answer moves the word one step: learning, almost, known. Its meaning fades in the reader as it moves up.</p>
       <p><strong>Root challenge</strong> (optional, harder): choose the root of each word, then its deep meaning from the classical dictionaries.</p>
       <p><strong>Honeycomb</strong>: answer words to fill a path across the comb and collect honey. <em>Two teams</em> plays a race on one screen for a class.</p>
-      <p><strong>Your progress</strong>: each sūrah shows how far its words have moved toward known, and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
+      <p><strong>Your progress</strong>: each sūrah shows the share of its words you know, with a lighter bar for words on their way (every right answer fills it a little), and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
     <div class="card">
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device, in the profile you are using.</p>
     <p class="note">Root meanings on the word card come from the classical dictionaries: Maqāyīs al-Lugha (Ibn Fāris), al-Mufradāt (al-Rāghib al-Iṣfahānī), Lisān al-ʿArab (Ibn Manẓūr), al-Ṣiḥāḥ (al-Jawharī), al-Qāmūs al-Muḥīṭ and Baṣāʾir Dhawī al-Tamyīz (al-Fīrūzābādī) and ʿUmdat al-Ḥuffāẓ (al-Samīn al-Ḥalabī). Choose a dictionary in the list on the word card and its meaning for the root shows in English and Urdu, with the phrase from its entry that the meaning rests on. The phrases are copied word for word from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī), which also has each full entry. The English and Urdu are translations of the dictionaries, made with AI help. al-Muʿjam al-Ishtiqāqī (Muḥammad Ḥasan Jabal) is still under copyright, so it is linked rather than quoted.</p>
