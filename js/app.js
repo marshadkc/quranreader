@@ -51,7 +51,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 25; // keep in step with VERSION in sw.js
+const VERSION_NO = 26; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -232,12 +232,15 @@ export const quizLangHTML = (ws) => !anyUrdu(ws) ? "" : `<div class="seg" aria-l
 export const bothHTML = (w) => [w.en && `<strong>${esc(w.en)}</strong>`, w.ur && `<strong class="ur">${esc(w.ur)}</strong>`].filter(Boolean).join(" · ");
 export const setQuizLang = (b) => { store.set("quizLang", b.dataset.qlang); document.querySelectorAll("[data-qlang]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.qlang === b.dataset.qlang)); };
 // Wrong answers: other words whose meaning differs from the right one, and from each other, in both
-// languages, so the options stay distinct whichever language they are shown in.
+// languages, so the options stay distinct whichever language they are shown in. Never the same word
+// (same shape or base word) met elsewhere: عَلَىٰ is "to" in 18:1 but "on" elsewhere, and "on" must not
+// show as a wrong answer.
+const sameWord = (x, w) => x.k === w.k || (!!x.l && x.l === w.l);
 export function distractors(w, pool, k = 3) {
   const used = { en: new Set([w.en].filter(Boolean)), ur: new Set([w.ur].filter(Boolean)) }, out = [];
   for (const x of [...pool].sort(() => Math.random() - 0.5)) {
     if (out.length === k) break;
-    if (!hasMeaning(x) || ["en", "ur"].some((l) => x[l] && used[l].has(x[l])) || meaningOf(x, "en") === meaningOf(w, "en")) continue;
+    if (!hasMeaning(x) || sameWord(x, w) || ["en", "ur"].some((l) => x[l] && used[l].has(x[l])) || meaningOf(x, "en") === meaningOf(w, "en")) continue;
     out.push(x); ["en", "ur"].forEach((l) => x[l] && used[l].add(x[l]));
   }
   return out;
@@ -656,7 +659,7 @@ async function practise(n, range) {
   const ask = () => {
     const w = r.deck[r.i];
     // options are words, not text, so switching the answer language keeps the same question
-    r.q = { w, opts: [w, ...distractors(w, all)].sort(() => Math.random() - 0.5), done: false, fb: "What does the highlighted word mean?", marks: {} };
+    r.q = { w, opts: [w, ...distractors(w, all)].sort(() => Math.random() - 0.5), done: false, fb: "What does the highlighted word mean in this āyah?", marks: {} };
     draw();
   };
   const draw = () => {
