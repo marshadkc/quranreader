@@ -51,7 +51,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 26; // keep in step with VERSION in sw.js
+const VERSION_NO = 28; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -253,9 +253,13 @@ export function distractors(w, pool, k = 3) {
   }
   return out;
 }
-// "Practise up to here": a round from the āyah after the last one practised (or from 1 when reviewing) to this one
+// "Practise up to here": a round from the āyah after the last one practised to this one. An āyah already
+// practised gets a round of just itself, so the earlier āyāt are never pulled back in.
 const upto = (n) => store.get("upto." + n, 0);
-const practiseLink = (n, a) => { const f = upto(n) < a ? upto(n) + 1 : 1; return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}` : `āyāt ${f}–${a}`}</a>`; };
+const practiseLink = (n, a) => {
+  const again = a <= upto(n), f = again ? a : upto(n) + 1;
+  return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}${again ? " again" : ""}` : `āyāt ${f}–${a}`}</a>`;
+};
 function versesHTML(ayahs, idx, practiseIn) {
   let k = 0;
   return `<div class="verses${versesClass(ayahs.flatMap((a) => a.w))}" id="verses">
