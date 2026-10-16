@@ -1145,117 +1145,140 @@
   "wa": {
    "ar": null,
    "en": "and, while",
-   "ur": "اور"
+   "ur": "اور",
+   "hi": "और"
   },
   "wa-oath": {
    "ar": null,
    "en": "by (an oath)",
-   "ur": "قسم ہے"
+   "ur": "قسم ہے",
+   "hi": "क़सम है"
   },
   "fa": {
    "ar": null,
    "en": "so, then",
-   "ur": "پھر، تو"
+   "ur": "پھر، تو",
+   "hi": "फिर, तो"
   },
   "bi": {
    "ar": null,
    "en": "with, in, by",
-   "ur": "سے، میں"
+   "ur": "سے، میں",
+   "hi": "से, में"
   },
   "li": {
    "ar": null,
    "en": "for, to",
-   "ur": "کے لیے"
+   "ur": "کے لیے",
+   "hi": "के लिए"
   },
   "li-purpose": {
    "ar": null,
    "en": "so that",
-   "ur": "تاکہ"
+   "ur": "تاکہ",
+   "hi": "ताकि"
   },
   "la": {
    "ar": null,
    "en": "surely",
-   "ur": "یقیناً"
+   "ur": "یقیناً",
+   "hi": "यक़ीनन"
   },
   "li-command": {
    "ar": null,
    "en": "let",
-   "ur": "چاہیے کہ"
+   "ur": "چاہیے کہ",
+   "hi": "चाहिए कि"
   },
   "ka": {
    "ar": null,
    "en": "like",
-   "ur": "کی طرح"
+   "ur": "کی طرح",
+   "hi": "की तरह"
   },
   "al": {
    "ar": null,
    "en": "the",
-   "ur": "—"
+   "ur": "—",
+   "hi": "—"
   },
   "a-question": {
    "ar": null,
    "en": "(question)",
-   "ur": "کیا"
+   "ur": "کیا",
+   "hi": "क्या"
   },
   "sa": {
    "ar": null,
    "en": "will",
-   "ur": "عنقریب"
+   "ur": "عنقریب",
+   "hi": "अनक़रीब"
   },
   "ya": {
    "ar": null,
    "en": "O",
-   "ur": "اے"
+   "ur": "اے",
+   "hi": "ऐ"
   },
   "pron-3MS": {
    "ar": null,
    "en": "he, him, his",
-   "ur": "وہ، اس"
+   "ur": "وہ، اس",
+   "hi": "वह, उस"
   },
   "pron-3FS": {
    "ar": null,
    "en": "she, it, her",
-   "ur": "وہ، اس"
+   "ur": "وہ، اس",
+   "hi": "वह, उस"
   },
   "pron-3MP": {
    "ar": null,
    "en": "they, them, their",
-   "ur": "وہ، ان"
+   "ur": "وہ، ان",
+   "hi": "वे, उन"
   },
   "pron-3FP": {
    "ar": null,
    "en": "they, them (f.)",
-   "ur": "وہ، ان"
+   "ur": "وہ، ان",
+   "hi": "वे, उन"
   },
   "pron-3D": {
    "ar": null,
    "en": "the two of them",
-   "ur": "وہ دونوں"
+   "ur": "وہ دونوں",
+   "hi": "वे दोनों"
   },
   "pron-2MS": {
    "ar": null,
    "en": "you",
-   "ur": "تو، تیرا"
+   "ur": "تو، تیرا",
+   "hi": "तू, तेरा"
   },
   "pron-2FS": {
    "ar": null,
    "en": "you (f.)",
-   "ur": "تو، تیرا"
+   "ur": "تو، تیرا",
+   "hi": "तू, तेरा"
   },
   "pron-2MP": {
    "ar": null,
    "en": "you all",
-   "ur": "تم، تمہارا"
+   "ur": "تم، تمہارا",
+   "hi": "तुम, तुम्हारा"
   },
   "pron-1S": {
    "ar": null,
    "en": "I, me, my",
-   "ur": "میں، میرا"
+   "ur": "میں، میرا",
+   "hi": "मैं, मेरा"
   },
   "pron-1P": {
    "ar": null,
    "en": "we, us, our",
-   "ur": "ہم، ہمارا"
+   "ur": "ہم، ہمارا",
+   "hi": "हम, हमारा"
   }
  }
 }
