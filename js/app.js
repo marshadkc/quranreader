@@ -25,7 +25,8 @@ const profileKeys = (id) => {
 };
 
 export const state = {
-  lang: store.get("lang", "both"),     // both | en | ur | none (meanings hidden, to test yourself)
+  // the meaning languages shown under each word, at most two of en, ur, hi; none = hidden, to test yourself
+  langs: store.get("langs", null) || ({ en: ["en"], ur: ["ur"], none: [] })[store.get("lang", "both")] || ["en", "ur"],
   level: store.get("shape", null),     // word shape (shapeKey) -> 0 new, 1 learning, 2 almost, 3 known
   honey: store.get("honey", 0),
   combo: 0,
@@ -51,7 +52,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 28; // keep in step with VERSION in sw.js
+const VERSION_NO = 29; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -74,14 +75,14 @@ export async function surah(n) {
 const roots = async () => (ROOTS ||= await json("data/index/roots.json"));
 const forms = async () => (FORMS ||= await json("data/index/forms.json"));
 
-// ---------- word meanings (English and Urdu) ----------
+// ---------- word meanings (English, Urdu and Hindi) ----------
 // They are bundled in data/s/NNN.json from glosses/ (imported from Quran.com with tools/import_meanings.py).
 // If a sūrah or language has none bundled, they are fetched live from the Quran.com API instead and kept
 // on the device for at most 7 days, as Quran Foundation's developer terms ask for live use.
 const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
-const LANGS = ["en", "ur"];
-export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation.</p>`;
+const LANGS = ["en", "ur", "hi"];
+export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International); Hindi by Al-Huda International, with English where Quran.com has no Hindi for a word. Quran data provided by Quran Foundation.</p>`;
 const LIVE = new Map(); // "lang.sūrah" -> { at, p: promise of { ayah: [meanings] } or null }
 const cleanText = (s) => String(s || "").replace(/<sup[^>]*>.*?<\/sup>|<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 function liveMeanings(n, lang) {
@@ -128,7 +129,8 @@ export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 export const arHTML = (w) => w.p.map(([t, k]) => (k === "s" ? esc(t) : `<span class="${k}">${esc(t)}</span>`)).join("");
 export const hasMeaning = (w) => !!(w.en || w.ur);
-export const meaningOf = (w, lang) => (lang === "ur" ? w.ur : w.en) || w.en || w.ur || "";
+export const meaningOf = (w, lang) => w[lang] || w.en || w.ur || "";
+export const LANG_NAME = { en: "English", ur: "اردو", hi: "हिंदी" };
 
 // Search spelling, the same as norm() in tools/build_data.py, plus Urdu/Persian keyboard letters
 const FOLD = { "ٱ": "ا", "أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي", "ئ": "ي", "ؤ": "و", "ة": "ه", "ۥ": "", "ۦ": "", "ی": "ي", "ے": "ي", "ک": "ك", "ہ": "ه", "ۃ": "ه", "ھ": "ه" };
@@ -227,17 +229,24 @@ let view = { ws: [], sel: null, prog: null };
 function wordHTML(w, k, idx) {
   const pl = w.p.filter((x) => x[1] !== "s").map((x) => (idx.parts[x[2]] || {}).en).filter((x) => x && x !== "—");
   return `<button class="w lv${hasMeaning(w) ? lv(w) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
-    <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}</span></button>`;
+    <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}${hiSpan(w)}</span></button>`;
 }
-const anyUrdu = (ws) => ws.some((w) => w.ur);
-// Quiz answers are in English or Urdu, switchable inside the practice and the Honeycomb.
-// The first time, they follow the reader: Urdu if the reader shows only Urdu.
-export const quizLang = (ws) => (anyUrdu(ws) ? store.get("quizLang", state.lang === "ur" ? "ur" : "en") : "en");
-export const quizLangHTML = (ws) => !anyUrdu(ws) ? "" : `<div class="seg" aria-label="Answers in">
-  <button data-qlang="en" aria-pressed="${quizLang(ws) === "en"}">English</button>
-  <button data-qlang="ur" aria-pressed="${quizLang(ws) === "ur"}">اردو</button></div>`;
-// After a wrong answer, the meaning is shown in both languages so the pair is learnt together.
-export const bothHTML = (w) => [w.en && `<strong>${esc(w.en)}</strong>`, w.ur && `<strong class="ur">${esc(w.ur)}</strong>`].filter(Boolean).join(" · ");
+// Hindi under a word; where Quran.com has none (small words like مِن), the English, hidden when English shows anyway
+const hiSpan = (w) => (w.hi || w.en ? `<span class="hi${w.hi ? "" : " fb"}" lang="hi">${esc(w.hi || w.en)}</span>` : "");
+const has = (ws, l) => ws.some((w) => w[l]);
+const anyUrdu = (ws) => has(ws, "ur");
+// the meaning languages this set of words can show, in the switch's order
+const langsOf = (ws) => LANGS.filter((l) => l === "en" || has(ws, l));
+// Quiz answers are in English, Urdu or Hindi, switchable inside the practice and the Honeycomb.
+// The first time, they follow the reader's first language.
+export const quizLang = (ws) => { const l = store.get("quizLang", state.langs[0] || "en"); return langsOf(ws).includes(l) ? l : "en"; };
+export const quizLangHTML = (ws) => langsOf(ws).length < 2 ? "" : `<div class="seg" aria-label="Answers in">
+  ${langsOf(ws).map((l) => `<button data-qlang="${l}" aria-pressed="${quizLang(ws) === l}">${LANG_NAME[l]}</button>`).join("")}</div>`;
+// After a wrong answer, the meaning is shown in the reader's languages and the answer language, so they are learnt together
+export const bothHTML = (w) => {
+  const ls = new Set([...(state.langs.length ? state.langs : ["en", "ur"]), store.get("quizLang", "en")]);
+  return LANGS.filter((l) => ls.has(l) && w[l]).map((l) => `<strong class="${l === "en" ? "" : l}">${esc(w[l])}</strong>`).join(" · ") || `<strong>${esc(w.en || "")}</strong>`;
+};
 export const setQuizLang = (b) => { store.set("quizLang", b.dataset.qlang); document.querySelectorAll("[data-qlang]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.qlang === b.dataset.qlang)); };
 // Wrong answers: other words whose meaning differs from the right one, and from each other, in both
 // languages, so the options stay distinct whichever language they are shown in. Never the same word
@@ -245,11 +254,11 @@ export const setQuizLang = (b) => { store.set("quizLang", b.dataset.qlang); docu
 // show as a wrong answer.
 const sameWord = (x, w) => x.k === w.k || (!!x.l && x.l === w.l);
 export function distractors(w, pool, k = 3) {
-  const used = { en: new Set([w.en].filter(Boolean)), ur: new Set([w.ur].filter(Boolean)) }, out = [];
+  const used = Object.fromEntries(LANGS.map((l) => [l, new Set([w[l]].filter(Boolean))])), out = [];
   for (const x of [...pool].sort(() => Math.random() - 0.5)) {
     if (out.length === k) break;
-    if (!hasMeaning(x) || sameWord(x, w) || ["en", "ur"].some((l) => x[l] && used[l].has(x[l])) || meaningOf(x, "en") === meaningOf(w, "en")) continue;
-    out.push(x); ["en", "ur"].forEach((l) => x[l] && used[l].add(x[l]));
+    if (!hasMeaning(x) || sameWord(x, w) || LANGS.some((l) => x[l] && used[l].has(x[l])) || meaningOf(x, "en") === meaningOf(w, "en")) continue;
+    out.push(x); LANGS.forEach((l) => x[l] && used[l].add(x[l]));
   }
   return out;
 }
@@ -272,12 +281,17 @@ function versesHTML(ayahs, idx, practiseIn) {
       </article>`;
     }).join("")}</div><div id="sheetbox"></div>`;
 }
-// The meanings shown: with no Urdu meanings yet, English or none
-const readLang = (ws) => (anyUrdu(ws) || state.lang === "none" ? state.lang : "en");
-const versesClass = (ws) => ({ en: " only-en", ur: " only-ur", none: " no-meaning" })[readLang(ws)] || "";
-const langHTML = (ws) => `<div class="seg" aria-label="Meaning language">
-  ${(anyUrdu(ws) ? [["both", "Both"], ["en", "English"], ["ur", "اردو"], ["none", "None"]] : [["en", "English"], ["none", "None"]])
-    .map(([l, t]) => `<button data-lang="${l}" aria-pressed="${readLang(ws) === l}">${t}</button>`).join("")}</div>`;
+// The meanings shown: the reader's languages this sūrah has (English if it has none of them), or none
+const readLangs = (ws) => { const ls = state.langs.filter((l) => langsOf(ws).includes(l)); return ls.length || !state.langs.length ? ls : ["en"]; };
+const versesClass = (ws) => { const ls = readLangs(ws); return ls.length ? LANGS.filter((l) => !ls.includes(l)).map((l) => " hide-" + l).join("") : " no-meaning"; };
+// Up to two languages at once: picking a third drops the one picked first; None hides them all
+const langHTML = (ws) => `<div class="seg" aria-label="Meaning languages">
+  ${[...langsOf(ws), "none"].map((l) => `<button data-lang="${l}" aria-pressed="${l === "none" ? !readLangs(ws).length : readLangs(ws).includes(l)}">${LANG_NAME[l] || "None"}</button>`).join("")}</div>`;
+function pickLang(l) {
+  const ls = state.langs.filter((x) => x !== l);
+  state.langs = l === "none" ? [] : state.langs.includes(l) ? ls : [...ls, l].slice(-2);
+  store.set("langs", state.langs);
+}
 
 // Root meaning: a short line in the reader's language where one is approved, then the dictionaries' own words
 const BOOKS = { l: ["lisan", "Ibn Manẓūr, Lisān al-ʿArab"], m: ["maqayees", "Ibn Fāris, Maqāyīs al-Lugha"], r: ["mufradat-ragheb", "al-Rāghib, al-Mufradāt"] };
@@ -297,14 +311,14 @@ const DICTS = [
 ];
 const MEANS = new Map();
 const rootOf = (r) => { if (!MEANS.has(r)) MEANS.set(r, json(`data/root/${encodeURIComponent(r)}.json`).catch(() => { MEANS.delete(r); return {}; })); return MEANS.get(r); };
-// English and/or Urdu, following the reader's meaning switch
-const gistHTML = (en, ur) => ["en", "ur"].filter((l) => (l === "en" ? en : ur) && (!["en", "ur"].includes(state.lang) || state.lang === l || (l === "en" && !ur)))
-  .map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(ur)}</div>` : `<div><strong>${esc(en)}</strong></div>`).join("");
+// English and/or Urdu, following the reader's languages (English when only Hindi is picked: there is no Hindi summary)
+const gistHTML = (en, ur) => { const ls = state.langs.filter((l) => l !== "hi"); return ["en", "ur"].filter((l) => (l === "en" ? en : ur) && (!ls.length || ls.includes(l) || (l === "en" && !ur))); };
+const gistLines = (en, ur) => gistHTML(en, ur).map((l) => l === "ur" ? `<div class="ur" dir="rtl">${esc(ur)}</div>` : `<div><strong>${esc(en)}</strong></div>`).join("");
 function coreHTML(c, r) {
   if (!c) return "";
   const quotes = (c.q || []).map(([k, t, form]) =>
     `<div class="q"><span class="ar" dir="rtl">${esc(t)}</span> <a class="note" href="https://tafsir.app/${BOOKS[k][0]}/${encodeURIComponent(form)}" target="_blank" rel="noopener">${BOOKS[k][1]}</a></div>`).join("");
-  return `<div class="eyebrow">Root meaning</div>${gistHTML(c.en, c.ur)}${quotes}`;
+  return `<div class="eyebrow">Root meaning</div>${gistLines(c.en, c.ur)}${quotes}`;
 }
 // the word card's root meaning: a dictionary list, and the chosen dictionary's meaning in English and Urdu
 function rootHTML(d, r, k) {
@@ -315,22 +329,25 @@ function rootHTML(d, r, k) {
   const link = `<a class="note" href="https://tafsir.app/${src}/${encodeURIComponent(form || r)}" target="_blank" rel="noopener">full entry on tafsir.app</a>`;
   const body = k === "i"
     ? `<p class="note">${esc(name)} is a modern book still under copyright, so it is not copied into this app. Read its entry on tafsir.app.</p><div>${link}</div>`
-    : `${gistHTML(en, ur)}<div class="q"><span class="ar" dir="rtl">${esc(t)}</span></div>
+    : `${gistLines(en, ur)}<div class="q"><span class="ar" dir="rtl">${esc(t)}</span></div>
        <div class="note">${esc(by)}, ${esc(name)}${form && form !== r ? `, under <span class="ar">${esc(spaced(form))}</span>` : ""} · ${link}</div>`;
   return `<div class="eyebrow">Root meaning</div>
     <label class="dpick"><span class="note">Dictionary</span><select data-dict>${ks.map((x) => { const n = DICTS.find((y) => y[0] === x)[2];
       return `<option value="${x}" ${x === k ? "selected" : ""}>${esc(n)}${x === "i" ? " (link)" : ""}</option>`; }).join("")}</select></label>${body}`;
 }
+// the word card shows English, then the reader's other languages (Urdu when meanings are hidden)
+const sheetLangs = () => (state.langs.length ? state.langs : ["ur"]);
 function sheetHTML(w, idx) {
   const parts = w.p.filter((x) => x[1] !== "s").map(([t, , key]) => {
     const g = idx.parts[key] || {};
-    return `<span class="chip"><span class="ar">${esc(t)}</span> = ${esc(g.en)}${g.ur && g.ur !== "—" ? " · " + esc(g.ur) : ""}</span>`;
+    const more = sheetLangs().filter((l) => l !== "en" && g[l] && g[l] !== "—").map((l) => " · " + esc(g[l])).join("");
+    return `<span class="chip"><span class="ar">${esc(t)}</span> = ${esc(g.en)}${more}</span>`;
   }).join(" ") || "None";
   const fam = [...new Set(view.ws.filter((x) => w.r && x.r === w.r && x.t !== w.t).map((x) => x.t))];
   const key = w.r || "=" + w.l;
   return `<div class="sheet" id="sheet">
     <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w)]}</div>
-      <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${w.ur ? `<div class="ur">${esc(w.ur)}</div>` : ""}</div>
+      <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${sheetLangs().filter((l) => l !== "en" && w[l]).map((l) => `<div class="${l}" lang="${l}">${esc(w[l])}</div>`).join("")}</div>
       <div class="ar big">${arHTML(w)}</div></div>
     <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
       <dt>Base word</dt><dd><span class="ar" style="font-size:22px">${esc(w.l)}</span> <span class="note">· ${w.f} times in the Quran</span></dd>
@@ -346,8 +363,8 @@ function sheetHTML(w, idx) {
 function readingClick(e, idx) {
   const lb = e.target.closest("[data-lang]");
   if (lb) {
-    state.lang = lb.dataset.lang; store.set("lang", state.lang);
-    document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === state.lang));
+    pickLang(lb.dataset.lang);
+    lb.closest(".seg").outerHTML = langHTML(view.ws);
     $("#verses").className = "verses" + versesClass(view.ws);
     app.querySelectorAll(".peek").forEach((x) => x.classList.remove("peek"));
     return;
@@ -848,8 +865,8 @@ async function parts() {
   const rows = [...seen.entries()].sort((a, b) => b[1].count - a[1].count);
   app.innerHTML = `<h1>Word parts</h1>
     <p class="sub">These small pieces attach to the front or end of a word. Learn them once and you can read many more words. They are counted across Al-Fātiḥah and Juz ʿAmma.</p>
-    <div class="card tbl"><table><thead><tr><th>Part</th><th>Meaning</th><th>اردو</th><th>Times</th><th>Example</th></tr></thead><tbody>
-    ${rows.map(([key, e]) => { const g = idx.parts[key] || {}; return `<tr><td class="ar p" style="font-size:24px">${[...e.forms].slice(0, 3).map(esc).join(" ")}</td><td>${esc(g.en)}</td><td class="ur">${esc(g.ur)}</td><td>${e.count}</td><td class="ar" style="font-size:20px">${e.ex.map(esc).join("، ")}</td></tr>`; }).join("")}
+    <div class="card tbl"><table><thead><tr><th>Part</th><th>Meaning</th><th>اردو</th><th lang="hi">हिंदी</th><th>Times</th><th>Example</th></tr></thead><tbody>
+    ${rows.map(([key, e]) => { const g = idx.parts[key] || {}; return `<tr><td class="ar p" style="font-size:24px">${[...e.forms].slice(0, 3).map(esc).join(" ")}</td><td>${esc(g.en)}</td><td class="ur">${esc(g.ur)}</td><td lang="hi">${esc(g.hi || "")}</td><td>${e.count}</td><td class="ar" style="font-size:20px">${e.ex.map(esc).join("، ")}</td></tr>`; }).join("")}
     </tbody></table></div>`;
 }
 
@@ -859,7 +876,7 @@ function about() {
     <div class="card how"><h2>How to learn</h2>
       <ol>
         <li><strong>Take a small set of āyāt</strong>: 3, 5 or 10, as your free time allows each day.</li>
-        <li><strong>Say each Arabic word aloud, then its meaning</strong> in English or Urdu (choose Both, English or اردو above the āyāt).</li>
+        <li><strong>Say each Arabic word aloud, then its meaning</strong> in English, Urdu or Hindi (pick up to two of English, اردو and हिंदी above the āyāt).</li>
         <li><strong>Repeat the set 7 times.</strong> That's all.</li>
         <li><strong>Test yourself:</strong> tap <em>None</em> to hide the meanings and read the set once more. Tap a word if you need to peek.</li>
         <li><strong>Practise:</strong> tap <em>Practise āyāt X–Y</em> under the last āyah of your set. Each word comes up once; any you miss come back at the end.</li>

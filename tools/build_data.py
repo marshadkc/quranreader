@@ -3,7 +3,7 @@
 
 Inputs
   sources/morphology.txt               Quranic Arabic Corpus morphology (see sources/README.md)
-  glosses/NNN.tsv                      word and verse meanings written for this app
+  glosses/NNN.tsv                      word meanings: ayah, English, Urdu and (optional) Hindi, ';' between words
 
 Outputs
   data/surahs.json                     list of surahs with counts
@@ -178,6 +178,13 @@ SUFFIX = {
     "1S": ("I, me, my", "میں، میرا"),
     "1P": ("we, us, our", "ہم، ہمارا"),
 }
+# The same labels in Hindi (Devanagari), keyed by the Urdu
+HINDI = {
+    "اور": "और", "قسم ہے": "क़सम है", "پھر، تو": "फिर, तो", "سے، میں": "से, में", "کے لیے": "के लिए", "تاکہ": "ताकि",
+    "یقیناً": "यक़ीनन", "چاہیے کہ": "चाहिए कि", "کی طرح": "की तरह", "—": "—", "کیا": "क्या", "عنقریب": "अनक़रीब", "اے": "ऐ",
+    "وہ، اس": "वह, उस", "وہ، ان": "वे, उन", "وہ دونوں": "वे दोनों", "تو، تیرا": "तू, तेरा", "تم، تمہارا": "तुम, तुम्हारा",
+    "میں، میرا": "मैं, मेरा", "ہم، ہمارا": "हम, हमारा",
+}
 
 
 COURSE = {1} | set(range(78, 115))  # Al-Fatihah and Juz Amma: the learning course
@@ -258,15 +265,16 @@ def load_glosses(s):
         if not line.strip() or line.startswith("#"):
             continue
         cols = line.split("\t")
-        if len(cols) != 3:
-            sys.exit(f"{path.name}:{n}: expected 3 tab-separated columns, got {len(cols)}")
-        key, en, ur = cols
+        if len(cols) not in (3, 4):
+            sys.exit(f"{path.name}:{n}: expected 3 or 4 tab-separated columns, got {len(cols)}")
+        key, en, ur, hi = (cols + [""])[:4]
         if key.startswith("v"):
             verses[int(key[1:])] = (en.strip(), ur.strip())
         else:
             ens = [x.strip() for x in en.split(";")]
             urs = [x.strip() for x in ur.split(";")]
-            words[int(key)] = (ens, urs, n)
+            his = [x.strip() for x in hi.split(";")] if hi.strip() else []
+            words[int(key)] = (ens, urs, his, n)
     return words, verses
 
 
@@ -287,12 +295,14 @@ def build():
         for a in sorted(by_surah[s]):
             ws = by_surah[s][a]
             if a in gw:
-                ens, urs, line = gw[a]
+                ens, urs, his, line = gw[a]
                 if len(ens) != len(ws) or len(urs) != len(ws):
                     problems.append(f"{s:03d}.tsv line {line}: ayah {a} has {len(ws)} words, got {len(ens)} English and {len(urs)} Urdu")
                 else:
-                    for wd, en, ur in zip(ws, ens, urs):
+                    for i, (wd, en, ur) in enumerate(zip(ws, ens, urs)):
                         wd["en"], wd["ur"] = en, ur
+                        if len(his) == len(ws) and his[i]:
+                            wd["hi"] = his[i]  # Hindi, where Quran.com has it for this word
                     glossed += len(ws)
             for wi, wd in enumerate(ws, 1):
                 wd["f"] = lemma_count[wd["l"]]
@@ -310,8 +320,8 @@ def build():
         ar, en, meaning = SURAHS[s]
         index.append({"n": s, "ar": ar, "en": en, "meaning": meaning, "ayahs": len(ayahs), "words": nwords, "ready": glossed == nwords, "course": s in COURSE})
         (OUT / "s" / f"{s:03d}.json").write_text(json.dumps({"n": s, "ar": ar, "en": en, "meaning": meaning, "ayahs": ayahs}, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
-    parts = {k: {"ar": None, "en": v[1], "ur": v[2]} for v in PREFIX.values() for k in [v[0]]}
-    parts.update({"pron-" + k: {"ar": None, "en": v[0], "ur": v[1]} for k, v in SUFFIX.items()})
+    parts = {k: {"ar": None, "en": v[1], "ur": v[2], "hi": HINDI[v[2]]} for v in PREFIX.values() for k in [v[0]]}
+    parts.update({"pron-" + k: {"ar": None, "en": v[0], "ur": v[1], "hi": HINDI[v[1]]} for k, v in SUFFIX.items()})
     (OUT / "index").mkdir(exist_ok=True)
     # each root: [[base word, [[spelling, [places...]], ...]], ...], most frequent first
     size = lambda x: sum(len(o) for o in x.values())

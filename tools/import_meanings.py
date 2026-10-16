@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import word-by-word English and Urdu meanings from the Quran.com API into glosses/NNN.tsv.
+"""Import word-by-word English, Urdu and Hindi meanings from the Quran.com API into glosses/NNN.tsv.
 
 Run this where the network allows api.quran.com, then run tools/build_data.py.
 Quran Foundation's developer terms do not allow storing their content as files; the project owner chose to
@@ -37,7 +37,9 @@ def fetch(s, lang, verse_id=None):
         with urllib.request.urlopen(req, timeout=60) as r:
             data = json.load(r)
         for v in data["verses"]:
-            words = [w["translation"]["text"] for w in v["words"] if w.get("char_type_name") == "word"]
+            # a word with no Hindi comes back in English: keep it empty instead
+            words = [w["translation"]["text"] if lang != "hi" or w["translation"].get("language_name") == "hindi" else ""
+                     for w in v["words"] if w.get("char_type_name") == "word"]
             verse = v["translations"][0]["text"] if verse_id and v.get("translations") else None
             out[v["verse_number"]] = (words, verse)
         nxt = data.get("pagination", {}).get("next_page")
@@ -68,8 +70,8 @@ def main():
         if path.exists() and not a.force:
             print(f"{s:03d}: glosses exist, skipped (use --force)")
             continue
-        en, ur = fetch(s, "en", a.verse_en), fetch(s, "ur", a.verse_ur)
-        lines = [f"# Surah {s}: word meanings from Quran.com (Quran Foundation); Urdu by Dr. Farhat Hashmi, Al-Huda International."]
+        en, ur, hi = fetch(s, "en", a.verse_en), fetch(s, "ur", a.verse_ur), fetch(s, "hi")
+        lines = [f"# Surah {s}: word meanings from Quran.com (Quran Foundation); Urdu by Dr. Farhat Hashmi, Al-Huda International. Hindi by Al-Huda International (from Quran.com)."]
         skipped = []
         for ay in sorted(en):
             n = counts.get((s, ay), 0)
@@ -77,7 +79,9 @@ def main():
             if len(e) != n or len(u) != n:
                 skipped.append(f"{ay} (ours {n}, English {len(e)}, Urdu {len(u)})")
                 continue
-            lines.append(f"{ay}\t{' ; '.join(clean(x) for x in e)}\t{' ; '.join(clean(x) for x in u)}")
+            h = hi.get(ay, ([], None))[0]
+            h = " ; ".join(clean(x) for x in h) if len(h) == n else ""
+            lines.append(f"{ay}\t{' ; '.join(clean(x) for x in e)}\t{' ; '.join(clean(x) for x in u)}\t{h}")
             ve, vu = en[ay][1], ur.get(ay, ([], None))[1]
             if ve or vu:
                 lines.append(f"v{ay}\t{clean(ve)}\t{clean(vu)}")
