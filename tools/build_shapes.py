@@ -31,6 +31,8 @@ def subject(w):
         return ""
     kinds = [p[1] for p in w["p"]]
     i = len(kinds) - kinds[::-1].index("s")
+    if i < len(w["p"]) and w["p"][i][2:] == ["nna"]:
+        i += 1  # the stressing -nna is not the subject
     if i >= len(w["p"]) or (w["p"][i][2:] or [""])[0] == "pron-1S":
         return ""
     return SUBJECT.get(norm(w["p"][i][0]), "")
