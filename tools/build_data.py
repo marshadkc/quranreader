@@ -164,6 +164,10 @@ PREFIX = {
     ("INTG", "أ"): ("a-question", "(question)", "کیا"),
     ("FUT", "س"): ("sa", "will", "عنقریب"),
     ("VOC", "ي"): ("ya", "O", "اے"),
+    ("SUP", "و"): ("wa", "and", "اور"),             # وَلَٰكِنْ
+    ("COM", "و"): ("wa", "and", "اور"),
+    ("P", "ت"): ("ta-oath", "by (an oath)", "قسم ہے"),  # تَٱللَّهِ
+    ("EQ", "أ"): ("a-whether", "whether", "خواہ"),      # ءَأَنذَرْتَهُمْ
 }
 # End attachments (pronoun endings): person code -> (English, Urdu)
 SUFFIX = {
@@ -172,9 +176,11 @@ SUFFIX = {
     "3MP": ("they, them, their", "وہ، ان"),
     "3FP": ("they, them (f.)", "وہ، ان"),
     "3D": ("the two of them", "وہ دونوں"),
+    "2D": ("you two", "تم دونوں"),
     "2MS": ("you", "تو، تیرا"),
     "2FS": ("you (f.)", "تو، تیرا"),
     "2MP": ("you all", "تم، تمہارا"),
+    "2FP": ("you (women)", "تم (عورتیں)"),
     "1S": ("I, me, my", "میں، میرا"),
     "1P": ("we, us, our", "ہم، ہمارا"),
 }
@@ -183,8 +189,11 @@ HINDI = {
     "اور": "और", "قسم ہے": "क़सम है", "پھر، تو": "फिर, तो", "سے، میں": "से, में", "کے لیے": "के लिए", "تاکہ": "ताकि",
     "یقیناً": "यक़ीनन", "چاہیے کہ": "चाहिए कि", "کی طرح": "की तरह", "—": "—", "کیا": "क्या", "عنقریب": "अनक़रीब", "اے": "ऐ",
     "وہ، اس": "वह, उस", "وہ، ان": "वे, उन", "وہ دونوں": "वे दोनों", "تو، تیرا": "तू, तेरा", "تم، تمہارا": "तुम, तुम्हारा",
-    "میں، میرا": "मैं, मेरा", "ہم، ہمارا": "हम, हमारा",
+    "میں، میرا": "मैं, मेरा", "ہم، ہمارا": "हम, हमारा", "خواہ": "चाहे", "تم دونوں": "तुम दोनों", "تم (عورتیں)": "तुम (औरतें)",
+    "ضرور": "ज़रूर",
 }
+DUAL = {"3MD": "3D", "3FD": "3D"}  # the corpus marks "the two of them" as a verb's subject this way, as in كَانَا
+EMPH = ("nna", "surely (stress)", "ضرور")  # the -nna that stresses a verb, as in لَيَأْتِيَنَّكُم
 
 
 COURSE = {1} | set(range(78, 115))  # Al-Fatihah and Juz Amma: the learning course
@@ -218,6 +227,23 @@ def load_words():
     return words
 
 
+def subject_at(wd):
+    """Where a verb's subject ending is among its parts (ـتُ I, ـنَا we, ـوا they…), or None."""
+    if wd["pos"] != "V":
+        return None
+    kinds = [p[1] for p in wd["p"]]
+    i = len(kinds) - kinds[::-1].index("s")
+    if i < len(wd["p"]) and wd["p"][i][2:] == ["nna"]:
+        i += 1
+    if i >= len(wd["p"]) or len(wd["p"][i]) < 3 or not wd["p"][i][2].startswith("pron-"):
+        return None
+    n = norm(wd["p"][i][0])
+    return i if (n == "ت" if wd["p"][i][2] == "pron-1S" else n in SUBJECT_ENDS) else None
+
+
+SUBJECT_ENDS = {"وا", "و", "ون", "نا", "ن", "تم", "تمو", "تما", "تن", "ت", "ي", "ا", "ان", "ءو"}  # as in tools/build_shapes.py
+
+
 def word_entry(segs):
     stem_i = next((i for i, (_, _, f) in enumerate(segs) if "PREF" not in f["tags"]), 0)
     stem = segs[stem_i]
@@ -231,8 +257,11 @@ def word_entry(segs):
                 kind, gloss = "p", g
         elif i > stem_i and "SUFF" in f["tags"] and f["tags"][0] == "PRON":
             code = next((t for t in f["tags"] if t[:1] in "123"), "")
+            code = DUAL.get(code, code)
             if code in SUFFIX:
                 kind, gloss = "e", ("pron-" + code,) + SUFFIX[code]
+        elif i > stem_i and "SUFF" in f["tags"] and f["tags"][0] == "EMPH":
+            kind, gloss = "e", EMPH
         part = [form, kind]
         if gloss:
             part.append(gloss[0])
@@ -322,6 +351,28 @@ def build():
         (OUT / "s" / f"{s:03d}.json").write_text(json.dumps({"n": s, "ar": ar, "en": en, "meaning": meaning, "ayahs": ayahs}, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
     parts = {k: {"ar": None, "en": v[1], "ur": v[2], "hi": HINDI[v[2]]} for v in PREFIX.values() for k in [v[0]]}
     parts.update({"pron-" + k: {"ar": None, "en": v[0], "ur": v[1], "hi": HINDI[v[1]]} for k, v in SUFFIX.items()})
+    parts[EMPH[0]] = {"ar": None, "en": EMPH[1], "ur": EMPH[2], "hi": HINDI[EMPH[2]]}
+    # How often each part occurs in the whole Quran, its spellings and the commonest words with it, for the Word
+    # parts page. A verb's subject ending (كَفَرُوا "they denied") is counted apart, in "endings".
+    seen = {"counts": collections.defaultdict(lambda: [0, collections.Counter(), collections.Counter()]),
+            "endings": collections.defaultdict(lambda: [0, collections.Counter(), collections.Counter()])}
+    for s in by_surah.values():
+        for ws in s.values():
+            for wd in ws:
+                subj = subject_at(wd)
+                for i, part in enumerate(wd["p"]):
+                    if part[1] == "s" or len(part) < 3:
+                        continue
+                    e = seen["endings" if i == subj else "counts"][part[2]]
+                    e[0] += 1; e[1][part[0]] += 1; e[2][wd["t"]] += 1
+    SUBJ = {"3MP": ("they", "وہ سب", "वे सब"), "3FP": ("they (women)", "وہ (عورتیں)", "वे (औरतें)"),
+            "3D": ("the two of them", "وہ دونوں", "वे दोनों"), "2MS": ("you", "تو", "तू"),
+            "2FS": ("you (f.)", "تو (عورت)", "तू (औरत)"), "2MP": ("you all", "تم سب", "तुम सब"),
+            "2FP": ("you (women)", "تم (عورتیں)", "तुम (औरतें)"), "2D": ("you two", "تم دونوں", "तुम दोनों"),
+            "1S": ("I", "میں", "मैं"), "1P": ("we", "ہم", "हम")}
+    stats = {kind: {k: {"n": n, "f": [f for f, _ in fs.most_common(4) if f][:3], "ex": [t for t, _ in ex.most_common(3)],
+                        **(dict(zip(("en", "ur", "hi"), SUBJ[k[5:]])) if kind == "endings" else {})}
+                    for k, (n, fs, ex) in sorted(d.items(), key=lambda x: -x[1][0])} for kind, d in seen.items()}
     (OUT / "index").mkdir(exist_ok=True)
     # each root: [[base word, [[spelling, [places...]], ...]], ...], most frequent first
     size = lambda x: sum(len(o) for o in x.values())
@@ -329,7 +380,7 @@ def build():
                  for k, v in roots.items()}
     (OUT / "index" / "roots.json").write_text(json.dumps(roots_out, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
     (OUT / "index" / "forms.json").write_text(json.dumps({k: dict(v.most_common()) for k, v in sorted(forms.items())}, ensure_ascii=False, separators=(",", ":")), encoding="utf8")
-    (OUT / "surahs.json").write_text(json.dumps({"surahs": index, "parts": parts}, ensure_ascii=False, indent=1), encoding="utf8")
+    (OUT / "surahs.json").write_text(json.dumps({"surahs": index, "parts": parts, **stats}, ensure_ascii=False, indent=1), encoding="utf8")
     ready = sum(x["ready"] for x in index)
     print(f"built {len(index)} surahs, {ready} with meanings; {len(roots)} roots and base words, {len(forms)} search spellings")
     if problems:

@@ -13,7 +13,7 @@ const raw = {
   set(k, v) { try { localStorage.setItem("qwr." + k, JSON.stringify(v)); } catch { /* ignore */ } },
   del(k) { try { localStorage.removeItem("qwr." + k); } catch { /* ignore */ } },
 };
-const MINE = /^(shape|level|honey|lastPrac|hiveSrc|hiveScope|upto\.\d+|prac\.\d+)$/;
+const MINE = /^(shape|moved|level|honey|lastPrac|hiveSrc|hiveScope|upto\.\d+|prac\.\d+)$/;
 export const profiles = { list: () => raw.get("profiles", [{ id: "", name: "Me" }]), active: () => raw.get("profile", "") };
 const scoped = (k) => { const id = profiles.active(); return id && MINE.test(k) ? `p.${id}.${k}` : k; };
 export const store = { get: (k, d) => raw.get(scoped(k), d), set: (k, v) => raw.set(scoped(k), v), del: (k) => raw.del(scoped(k)) };
@@ -39,7 +39,9 @@ const shapeNorm = (t) => t.replace(/(?<![ىي])\u0670/g, "ا").replace(/[\u0610-
 const SUBJECT = { "وا": "و", "و": "و", "ون": "و", "نا": "نا", "ن": "ن", "تم": "تم", "تمو": "تم", "تما": "تما", "تن": "تن", "ت": "ت", "ي": "ي", "ا": "ا", "ان": "ان", "ءو": "و" };
 const subjectOf = (w) => {
   if (w.pos !== "V") return "";
-  const x = w.p[w.p.map((y) => y[1]).lastIndexOf("s") + 1];
+  let i = w.p.map((y) => y[1]).lastIndexOf("s") + 1;
+  if (w.p[i] && w.p[i][2] === "nna") i++; // the stressing -nna is not the subject
+  const x = w.p[i];
   return !x || x[2] === "pron-1S" ? "" : SUBJECT[shapeNorm(x[0])] || "";
 };
 const shapeKey = (w) => {
@@ -52,7 +54,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 29; // keep in step with VERSION in sw.js
+const VERSION_NO = 30; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -124,7 +126,6 @@ export async function withMeanings(n) {
 }
 const fromQuranCom = (d) => d.ayahs.some((a) => a.w.some(hasMeaning));
 
-export const ORDER = [1, ...Array.from({ length: 37 }, (_, i) => 78 + i)]; // Al-Fatihah and Juz Amma, where the Word parts page counts its examples
 export const arN = (n) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[d]);
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 export const arHTML = (w) => w.p.map(([t, k]) => (k === "s" ? esc(t) : `<span class="${k}">${esc(t)}</span>`)).join("");
@@ -184,6 +185,16 @@ async function migrateLevels() {
     }
   }
   state.level = level; store.set("shape", level);
+}
+// Word parts added on 2026-10-16 (كُمَا, ـنَّ, تَ, أَ, the و of وَلَٰكِنْ…) changed some words' shapes. Carry each
+// learner's level from the old shape to the new one, once (data/index/moved.json: old shape -> new shape).
+async function moveShapes() {
+  if (store.get("moved", 0) >= 1 || !Object.keys(state.level).length) return store.set("moved", 1);
+  const m = await json("data/index/moved.json");
+  for (const [from, to] of Object.entries(m)) {
+    if (from in state.level) state.level[to] = Math.max(state.level[to] || 0, state.level[from]); // the old key is kept: a few shapes still exist
+  }
+  store.set("shape", state.level); store.set("moved", 1);
 }
 const allWords = (d) => d.ayahs.flatMap((a) => a.w);
 const place = (x) => ({ s: Math.floor(x / 1e6), a: Math.floor(x / 1000) % 1000, w: x % 1000 });
@@ -855,19 +866,17 @@ async function rootChallenge(n, range) {
 }
 
 async function parts() {
-  const idx = await index(), loaded = await Promise.all(ORDER.map(surah));
-  const seen = new Map();
-  for (const w of loaded.flatMap(allWords)) for (const [t, k, key] of w.p) {
-    if (k === "s" || !key) continue;
-    if (!seen.has(key)) seen.set(key, { forms: new Set(), ex: [], count: 0 });
-    const e = seen.get(key); e.forms.add(t); e.count++; if (e.ex.length < 3 && !e.ex.includes(w.t)) e.ex.push(w.t);
-  }
-  const rows = [...seen.entries()].sort((a, b) => b[1].count - a[1].count);
+  // counted over the whole Quran by tools/build_data.py
+  const idx = await index();
+  const row = (g, e) => `<tr><td class="ar p" style="font-size:24px">${e.f.map(esc).join(" ")}</td><td>${esc(g.en)}</td><td class="ur">${esc(g.ur)}</td><td lang="hi">${esc(g.hi || "")}</td><td>${e.n.toLocaleString()}</td><td class="ar" style="font-size:20px">${e.ex.map(esc).join("، ")}</td></tr>`;
+  const table = (rows) => `<div class="card tbl"><table><thead><tr><th>Part</th><th>Meaning</th><th>اردو</th><th lang="hi">हिंदी</th><th>Times</th><th>Example</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   app.innerHTML = `<h1>Word parts</h1>
-    <p class="sub">These small pieces attach to the front or end of a word. Learn them once and you can read many more words. They are counted across Al-Fātiḥah and Juz ʿAmma.</p>
-    <div class="card tbl"><table><thead><tr><th>Part</th><th>Meaning</th><th>اردو</th><th lang="hi">हिंदी</th><th>Times</th><th>Example</th></tr></thead><tbody>
-    ${rows.map(([key, e]) => { const g = idx.parts[key] || {}; return `<tr><td class="ar p" style="font-size:24px">${[...e.forms].slice(0, 3).map(esc).join(" ")}</td><td>${esc(g.en)}</td><td class="ur">${esc(g.ur)}</td><td lang="hi">${esc(g.hi || "")}</td><td>${e.count}</td><td class="ar" style="font-size:20px">${e.ex.map(esc).join("، ")}</td></tr>`; }).join("")}
-    </tbody></table></div>`;
+    <p class="sub">These small pieces attach to the front or end of a word. Learn them once and you can read many more words. They are counted across the whole Quran.</p>
+    ${table(Object.entries(idx.counts || {}).map(([key, e]) => row(idx.parts[key] || {}, e)).join(""))}
+    <p class="note">Some short words are built from these pieces too, but are best learned whole: هٰذَا "this" is هَا + ذَا, and ذٰلِكَ "that" is ذَا + لِ + كَ.</p>
+    <h2>Verb endings: who does it</h2>
+    <p class="sub">The end of a verb tells you who does the action. A verb with no ending, like كَفَرَ, means "he".</p>
+    ${table(Object.entries(idx.endings || {}).map(([, e]) => row(e, e)).join(""))}`;
 }
 
 function about() {
@@ -982,7 +991,7 @@ $("#jar").textContent = state.honey;
 profileChip();
 addEventListener("hashchange", route);
 sidebar().catch(() => {});
-migrateLevels().catch(() => (state.level ||= {})).then(route);
+migrateLevels().catch(() => (state.level ||= {})).then(() => moveShapes().catch(() => {})).then(route);
 
 // A new version takes over as soon as it is installed (sw.js skips waiting); reload once so the page runs it.
 // Installed apps on phones are often resumed rather than reopened, so look for an update whenever the app comes back.
