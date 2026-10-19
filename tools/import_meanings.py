@@ -11,6 +11,9 @@ Usage
   Options:
     --verse-en ID   also import a verse translation (Quran.com translation id) for English
     --verse-ur ID   same for Urdu
+    --verse-hi ID   same for Hindi
+  By default 20, 234 and 122 (Saheeh International, Fateh Muhammad Jalandhari,
+  Maulana Azizul Haque al-Umari).
     --force         overwrite glosses that already exist
 
 The word lists are matched to our Arabic word by word; any ayah whose word count
@@ -56,8 +59,9 @@ def clean(t):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("surahs", nargs="*", type=int)
-    ap.add_argument("--verse-en", type=int)
-    ap.add_argument("--verse-ur", type=int)
+    ap.add_argument("--verse-en", type=int, default=20)
+    ap.add_argument("--verse-ur", type=int, default=234)
+    ap.add_argument("--verse-hi", type=int, default=122)
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
     words = build_data.load_words()
@@ -70,8 +74,8 @@ def main():
         if path.exists() and not a.force:
             print(f"{s:03d}: glosses exist, skipped (use --force)")
             continue
-        en, ur, hi = fetch(s, "en", a.verse_en), fetch(s, "ur", a.verse_ur), fetch(s, "hi")
-        lines = [f"# Surah {s}: word meanings from Quran.com (Quran Foundation); Urdu by Dr. Farhat Hashmi, Al-Huda International. Hindi by Al-Huda International (from Quran.com)."]
+        en, ur, hi = fetch(s, "en", a.verse_en), fetch(s, "ur", a.verse_ur), fetch(s, "hi", a.verse_hi)
+        lines = [f"# Surah {s}: word meanings from Quran.com (Quran Foundation); Urdu by Dr. Farhat Hashmi, Al-Huda International. Hindi by Al-Huda International (from Quran.com). Āyah translations: Saheeh International (English), Fateh Muhammad Jalandhari (Urdu), Maulana Azizul Haque al-Umari (Hindi)."]
         skipped = []
         for ay in sorted(en):
             n = counts.get((s, ay), 0)
@@ -82,9 +86,9 @@ def main():
             h = hi.get(ay, ([], None))[0]
             h = " ; ".join(clean(x) for x in h) if len(h) == n else ""
             lines.append(f"{ay}\t{' ; '.join(clean(x) for x in e)}\t{' ; '.join(clean(x) for x in u)}\t{h}")
-            ve, vu = en[ay][1], ur.get(ay, ([], None))[1]
-            if ve or vu:
-                lines.append(f"v{ay}\t{clean(ve)}\t{clean(vu)}")
+            ve, vu, vh = en[ay][1], ur.get(ay, ([], None))[1], hi.get(ay, ([], None))[1]
+            if ve or vu or vh:
+                lines.append(f"v{ay}\t{clean(ve)}\t{clean(vu)}\t{clean(vh)}")
         path.write_text("\n".join(lines) + "\n", encoding="utf8")
         print(f"{s:03d}: wrote {len(lines) - 1} lines" + (f"; word counts differ, left out ayah {', '.join(skipped)}" if skipped else ""))
 

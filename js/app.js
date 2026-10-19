@@ -54,7 +54,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 30; // keep in step with VERSION in sw.js
+const VERSION_NO = 31; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -84,7 +84,7 @@ const forms = async () => (FORMS ||= await json("data/index/forms.json"));
 const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 const LANGS = ["en", "ur", "hi"];
-export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International); Hindi by Al-Huda International, with English where Quran.com has no Hindi for a word. Quran data provided by Quran Foundation.</p>`;
+export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International); Hindi by Al-Huda International, with English where Quran.com has no Hindi for a word. Āyah translations: Saheeh International (English), Fateh Muhammad Jalandhari (Urdu) and Maulana Azizul Haque al-Umari (Hindi). Quran data provided by Quran Foundation.</p>`;
 const LIVE = new Map(); // "lang.sūrah" -> { at, p: promise of { ayah: [meanings] } or null }
 const cleanText = (s) => String(s || "").replace(/<sup[^>]*>.*?<\/sup>|<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 function liveMeanings(n, lang) {
@@ -280,6 +280,10 @@ const practiseLink = (n, a) => {
   const again = a <= upto(n), f = again ? a : upto(n) + 1;
   return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}${again ? " again" : ""}` : `āyāt ${f}–${a}`}</a>`;
 };
+// The āyah's full translation, one line per language; the reader's switch hides the ones not chosen
+const ayahLines = (a) => LANGS.filter((l) => a[l]).map((l) => `<span class="${l}" lang="${l}">${esc(a[l])}</span>`).join("");
+// the same, for places outside the reader: just the reader's languages (English and Urdu when meanings are hidden)
+export const ayahHTML = (a) => (state.langs.length ? state.langs : ["en", "ur"]).filter((l) => a[l]).map((l) => `<div class="${l}" lang="${l}">${esc(a[l])}</div>`).join("");
 function versesHTML(ayahs, idx, practiseIn) {
   let k = 0;
   return `<div class="verses${versesClass(ayahs.flatMap((a) => a.w))}" id="verses">
@@ -287,7 +291,7 @@ function versesHTML(ayahs, idx, practiseIn) {
       const faded = a.w.every((w) => lv(w) >= 2);
       return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
         <span class="vn">﴿${arN(a.n)}﴾</span></div>
-        ${a.en || a.ur ? `<div class="meaning${faded ? " faded" : ""}">${a.en ? `<span class="en">${esc(a.en)}</span>` : ""}${a.ur ? `<span class="ur">${esc(a.ur)}</span>` : ""}</div>` : ""}
+        ${LANGS.some((l) => a[l]) ? `<div class="meaning${faded ? " faded" : ""}">${ayahLines(a)}</div>` : ""}
         ${practiseIn && a.w.some(hasMeaning) ? practiseLink(practiseIn, a.n) : ""}
       </article>`;
     }).join("")}</div><div id="sheetbox"></div>`;

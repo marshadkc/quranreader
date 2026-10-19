@@ -298,7 +298,7 @@ def load_glosses(s):
             sys.exit(f"{path.name}:{n}: expected 3 or 4 tab-separated columns, got {len(cols)}")
         key, en, ur, hi = (cols + [""])[:4]
         if key.startswith("v"):
-            verses[int(key[1:])] = (en.strip(), ur.strip())
+            verses[int(key[1:])] = (en.strip(), ur.strip(), hi.strip())
         else:
             ens = [x.strip() for x in en.split(";")]
             urs = [x.strip() for x in ur.split(";")]
@@ -343,7 +343,7 @@ def build():
                         forms[spelling][key] += 1
             v = {"n": a, "w": ws}
             if a in gv:
-                v["en"], v["ur"] = gv[a]
+                v.update({l: t for l, t in zip(("en", "ur", "hi"), gv[a]) if t})
             ayahs.append(v)
         nwords = sum(len(v["w"]) for v in ayahs)
         ar, en, meaning = SURAHS[s]
