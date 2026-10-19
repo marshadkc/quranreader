@@ -126,7 +126,8 @@ h2{margin:0;font-size:18px;font-weight:600}
 .lv3.peek .gl{opacity:1}
 .meaning{border-top:1px dashed var(--line);padding-top:8px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:2px;transition:opacity .35s}
 .meaning.faded{opacity:.15}
-.hide-en .gl .en,.hide-ur .gl .ur,.hide-hi .gl .hi,.verses:not(.hide-en) .gl .hi.fb{display:none}
+.meaning .en,.meaning .hi{font-size:15px;line-height:1.55;color:var(--ink)}.meaning .ur{font-size:17px;line-height:2;color:var(--ink)}
+.hide-en .gl .en,.hide-ur .gl .ur,.hide-hi .gl .hi,.hide-en .meaning .en,.hide-ur .meaning .ur,.hide-hi .meaning .hi,.verses:not(.hide-en) .gl .hi.fb{display:none}
 .gl .hi{font-size:13px;line-height:1.4;direction:ltr}.gl .hi.fb{opacity:.75}
 .no-meaning .gl,.no-meaning .meaning{opacity:0}
 .no-meaning .meaning{cursor:pointer}
