@@ -136,35 +136,111 @@ export function formsHTML(d, w, langs) {
 }
 
 // ---------- Form Switch quiz ----------
-// A question turns the Quran word's form (tense and person) into another form of the same verb, with four
-// options from the verb's own table. Only verbs whose table is fully regular (no check flag) are asked.
-const TENSE_NAME = { pres: ["present", "حال", "वर्तमान"], past: ["past", "ماضی", "भूतकाल"], cmd: ["command", "امر", "आदेश"] };
+// A question turns a Quran word's form into another form of the same word, with options from that word's own
+// forms. Verbs: another person or tense from the verb's table (fully regular tables only). Nouns: another
+// number or case, using only forms the Quran itself has, so no option is made up.
 const LI = { en: 0, ur: 1, hi: 2 };
-export const formLabel = (k, p, lang = "en") => `${WHO[p][LI[lang] ?? 0]} · ${TENSE_NAME[k][LI[lang] ?? 0]}`;
+const TENSE_NAME = { pres: ["present", "حال", "वर्तमान"], past: ["past", "ماضی", "भूतकाल"], cmd: ["command", "امر", "आदेश"] };
+const NUM_NAME = {
+  MS: ["one (m)", "ایک (مذکر)", "एक (पु.)"], M: ["one (m)", "ایک (مذکر)", "एक (पु.)"], FS: ["one (f)", "ایک (مؤنث)", "एक (स्त्री.)"],
+  F: ["one (f)", "ایک (مؤنث)", "एक (स्त्री.)"], MD: ["two (m)", "دو (مذکر)", "दो (पु.)"], FD: ["two (f)", "دو (مؤنث)", "दो (स्त्री.)"],
+  D: ["two", "دو", "दो"], MP: ["many (m)", "بہت (مذکر)", "बहुत (पु.)"], FP: ["many (f)", "بہت (مؤنث)", "बहुत (स्त्री.)"], P: ["many", "بہت", "बहुत"],
+};
+const CASE_NAME = { NOM: ["doer", "فاعل", "कर्ता"], ACC: ["object", "مفعول", "कर्म"], GEN: ["after a preposition or 'of'", "مجرور", "संबंध"] };
+const AL_NAME = ["with ال", "ال کے ساتھ", "ال के साथ"];
+// "they (m) · present" for a verb form, "many (m) · doer · with ال" for a noun form
+export const _fits = (f) => fits(f); // for checks
+export function formLabel(o, lang = "en") {
+  const i = LI[lang] ?? 0;
+  if (o.k) return `${WHO[o.p][i]} · ${TENSE_NAME[o.k][i]}`;
+  return [NUM_NAME[o.num]?.[i], CASE_NAME[o.cs]?.[i], o.al ? AL_NAME[i] : ""].filter(Boolean).join(" · ");
+}
 export const formHL = hl;
-export const trickOf = (k, p) => TRICK[k][p];
-// the tense and person of a Quran word, when the quiz can use it: "pres.3MP" (moods are fine, passive is not)
-export function switchFrom(e, g) {
-  if (!e || e.pos !== "V" || e.check || !g) return null;
-  const [k, p, x] = g.split(".");
-  if (x === "PASS" || !TRICK[k] || !WHO[p] || !(e[k] || {})[p]) return null;
-  return { k, p, t: e[k][p] };
+const bare = (t) => t.replace(new RegExp(MARKS.source, "g"), "").replace(/[ٱأإآ]/g, "ا");
+const group = (n) => (n || "").replace(/[MF]/, "") || "S"; // one, two or many
+// the ending to look for in the answer (o, changed from the form "from"), and what it says
+export function trickOf(o, from) {
+  if (o.k) { const [pat, hint] = TRICK[o.k][o.p]; return [pat, hint]; }
+  if (!from || group(from.num) !== group(o.num)) {
+    const doer = o.cs === "NOM";
+    if (group(o.num) === "D") return doer ? ["ـَانِ", "two, as the doer"] : ["ـَيْنِ", "two, as object or after a preposition"];
+    if (group(o.num) === "P") {
+      if (/ُونَ$|ُۥنَ$/.test(o.t) && doer) return ["ـُونَ", "many men, as the doer"];
+      if (/ِينَ$/.test(o.t)) return ["ـِينَ", "many men, as object or after a preposition"];
+      if (/ُوا?$/.test(o.t)) return ["ـُو", "many men, as the doer; before 'of' the ن of ـُونَ drops"];
+      if (/[اٰ]تِ?ٍ?ُ?ٌ?$/.test(o.t.replace(/[\u064E\u0651]/g, ""))) return ["ـَات", "many women or things"];
+      return ["", "a broken plural: the inside of the word changes, so learn it as a word"];
+    }
+  }
+  const ENDS = { NOM: "ـُ ـٌ", ACC: "ـَ ـً", GEN: "ـِ ـٍ" };
+  return [ENDS[o.cs] || "", `${formLabel({ cs: o.cs }).replace(/^./, (c) => c.toUpperCase())} ends like this${o.al ? "; ال = the" : ""}`];
 }
 const shuffle = (a) => a.sort(() => Math.random() - 0.5);
-export function switchQuestion(e, from) {
+const pick = (l) => l[Math.floor(Math.random() * l.length)];
+const same = (a, b) => formLabel(a) === formLabel(b);
+
+function verbQuestion(e, g) {
+  if (e.check) return null;
+  const [k, p, x] = g.split(".");
+  if (x === "PASS" || !TRICK[k] || !WHO[p] || !(e[k] || {})[p]) return null;
+  const from = { k, p, t: e[k][p] };
   const cells = (k) => (k === "cmd" ? CMD : PERSONS).filter((p) => (e[k] || {})[p]).map((p) => ({ k, p, t: e[k][p] }));
-  const same = cells(from.k).filter((c) => c.t !== from.t);
-  const cross = ["pres", "past", "cmd"].filter((k) => k !== from.k).flatMap(cells).filter((c) => c.t !== from.t);
+  const inTense = cells(k).filter((c) => c.t !== from.t);
+  const cross = ["pres", "past", "cmd"].filter((x) => x !== k).flatMap(cells).filter((c) => c.t !== from.t);
   // mostly change the person within the tense, sometimes the tense
-  const pick = (l) => l[Math.floor(Math.random() * l.length)];
-  const sameP = cross.filter((c) => c.p === from.p);
-  const to = (Math.random() < 0.7 && same.length) || !cross.length ? pick(same) : pick(sameP.length ? sameP : cross);
+  const samePerson = cross.filter((c) => c.p === p);
+  const to = (Math.random() < 0.7 && inTense.length) || !cross.length ? pick(inTense) : pick(samePerson.length ? samePerson : cross);
   if (!to) return null;
   // wrong options: other cells of the target's tense first (so the person ending decides), then any
   const seen = new Set([to.t]), opts = [to];
-  for (const c of [...shuffle(cells(to.k)), ...shuffle([...same, ...cross])]) {
+  for (const c of [...shuffle(cells(to.k)), ...shuffle([...inTense, ...cross])]) {
     if (opts.length === 4) break;
     if (!seen.has(c.t)) { seen.add(c.t); opts.push(c); }
   }
   return opts.length < 3 ? null : { from, to, opts: shuffle(opts) };
+}
+// does the ending agree with the case? (a few corpus tags don't, and a quiz must not teach them)
+function fits(f) {
+  const many = /[DP]$/.test(f.num);
+  if (many && /ُونَ$|ُۥنَ$|َانِ$/.test(f.t)) return f.cs === "NOM";
+  if (many && /ِينَ$|َيْنِ$/.test(f.t)) return f.cs !== "NOM";
+  let t = f.t.replace(/[ؐ-ؚّ-ٰٟۖ-ۭ]+$/, "");
+  if (/ًا$/.test(t)) return f.cs === "ACC";
+  const v = t.slice(-1);
+  if (v === "ُ" || v === "ٌ") return f.cs === "NOM"; // ـُ ـٌ
+  if (v === "ِ" || v === "ٍ") return f.cs === "GEN" || (f.cs === "ACC" && /[اٰ]تِ?ٍ?$/.test(f.t.replace(/[\u064E\u0651]/g, ""))); // ـِ ـٍ (ـَاتِ is also object)
+  if (v === "َ" || v === "ً") return f.cs !== "NOM"; // ـَ ـً (some names take ـَ after a preposition)
+  return true; // no case ending written (ى, ا, …)
+}
+function nounQuestion(e, g, w) {
+  const [num, cs] = g.includes(".") ? g.split(".") : ["", g];
+  if (!NUM_NAME[num]) return null;
+  const all = (e.forms || []).map(([t, n, al, c]) => ({ t, num: n, al: !!al, cs: c })).filter((f) => CASE_NAME[f.cs] && NUM_NAME[f.num] && fits(f) && !/^.\u0652/.test(f.t)); // (a word can't start on a silent letter: a cut-off piece such as سْمِ)
+  // the Quran word's own form: same number and case, its letters found inside the word
+  const wb = bare(w.t), al = /ال/.test(wb);
+  const mine = all.filter((f) => f.num === num && f.cs === cs && wb.includes(bare(f.t).replace(/^ال/, "")));
+  const from = mine.find((f) => f.al === al) || mine[0];
+  if (!from) return null;
+  const others = all.filter((f) => f.t !== from.t && !same(f, from));
+  // mostly change the number (one, two, many), else the case
+  const newNum = others.filter((f) => group(f.num) !== group(from.num));
+  const to = pick(newNum.filter((f) => f.cs === from.cs && f.al === from.al)) || pick(newNum) || pick(others);
+  if (!to) return null;
+  // wrong options: other forms, never one whose text could also carry the target's label
+  // (nor one that differs from the answer only by ال, which the label may not say)
+  const ok = (t) => !all.some((f) => f.t === t && (same(f, to) || (group(f.num) === group(to.num) && f.cs === to.cs)));
+  const seen = new Set([to.t]), opts = [to];
+  for (const f of shuffle(others.concat(from))) {
+    if (opts.length === 4) break;
+    if (!seen.has(f.t) && ok(f.t)) { seen.add(f.t); opts.push(f); }
+  }
+  return opts.length < 3 ? null : { from, to, opts: shuffle(opts) };
+}
+// A question for the Quran word w (with its forms data d), or null when its forms can't make a fair one
+export function switchQuestion(d, w) {
+  const e = d && d[w.l];
+  if (!e || !w.g) return null;
+  if (e.pos === "V" && w.pos === "V") return verbQuestion(e, w.g);
+  if (e.pos === "N" && w.pos === "N") return nounQuestion(e, w.g, w);
+  return null;
 }

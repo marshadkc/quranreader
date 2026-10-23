@@ -1,7 +1,7 @@
 // Quran Word Reader: sūrah sidebar, reader with fading meanings, āyah and word search,
 // practice quiz, word parts and the Ayah Honeycomb.
 import { renderHive } from "./hive.js";
-import { formsOf, formsHTML, formLabel, formHL, trickOf, switchFrom, switchQuestion } from "./forms.js";
+import { formsOf, formsHTML, formLabel, formHL, trickOf, switchQuestion } from "./forms.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -60,7 +60,7 @@ const LABEL = ["new", "learning", "almost", "known"];
 const VERSION_NO = 33; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
-  33: ["Form Switch: a new quiz that turns each verb into another person or tense (on every sūrah page).", "Word forms on the word card: how each verb and noun changes, with the easy trick for each.", "This notice, so you know when the app has updated."],
+  33: ["Form Switch: a new quiz that turns each word into another form: a verb into another person or tense, a noun into one, two or many (on every sūrah page).", "Two teams in Honeycomb can now ask word forms too.", "Word forms on the word card: how each verb and noun changes, with the easy trick for each.", "This notice, so you know when the app has updated."],
   32: ["Āyah translations under each āyah in English, Urdu and Hindi."],
 };
 
@@ -684,7 +684,7 @@ async function practise(n, range) {
         <p class="note" id="pcount"></p>
         ${upto(n) ? `<p class="note">"Practise up to here" in the reader continues after āyah ${upto(n)}, where your last round ended. <button class="btn small" id="preset">Start over from āyah 1</button></p>` : ""}
         <button class="btn primary" id="pgo">Start</button>
-        <p class="note">Ready for more? The optional <a href="#/s/${n}/roots/${opt.from}-${opt.to}">Root challenge</a> asks each word's root and its deep meaning, and <a href="#/s/${n}/forms/${opt.from}-${opt.to}">Form Switch</a> turns each verb into another person or tense.</p>
+        <p class="note">Ready for more? The optional <a href="#/s/${n}/roots/${opt.from}-${opt.to}">Root challenge</a> asks each word's root and its deep meaning, and <a href="#/s/${n}/forms/${opt.from}-${opt.to}">Form Switch</a> turns each word into another form.</p>
       </section>`;
     count();
     app.oninput = count;
@@ -889,57 +889,60 @@ async function rootChallenge(n, range) {
   };
 }
 
-// Form Switch: a verb from the chosen āyāt is shown in its Quran form; choose the form for another person or
-// tense from four forms of the same verb (data/forms, the regular tables only). Gives honey, not word steps.
+// Form Switch: a word from the chosen āyāt is shown in its Quran form; choose its form for another person or
+// tense (verbs) or number or case (nouns) from forms of the same word (see switchQuestion in forms.js).
+// Gives honey, not word steps.
 async function formSwitch(n, range) {
   const d = await withMeanings(n), all = allWords(d);
-  const verbs = all.filter((w) => w.pos === "V" && w.g && !w.g.endsWith("PASS"));
-  if (!verbs.length) { app.innerHTML = `<div class="banner">This sūrah has no verbs to switch. Try another sūrah.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
+  const usable = all.filter((w) => w.g && (w.pos === "N" || (w.pos === "V" && !w.g.endsWith("PASS"))));
+  if (!usable.length) { app.innerHTML = `<div class="banner">This sūrah has no words to switch. Try another sūrah.</div><a class="btn" href="#/s/${n}">Back to the sūrah</a>`; return; }
   const last = d.ayahs.length, m = /^(\d+)-(\d+)$/.exec(range || "");
-  const opt = { from: m ? +m[1] : 1, to: m ? +m[2] : last, len: 10 };
+  const opt = { from: m ? +m[1] : 1, to: m ? +m[2] : last, len: 10, pos: store.get("switchPos", "VN") };
   const lang = () => quizLang(all);
-  const label = (c) => { const l = lang(); return l === "en" ? esc(formLabel(c.k, c.p)) : `<span class="${l === "ur" ? "ur" : ""}" lang="${l}">${esc(formLabel(c.k, c.p, l))}</span> <span class="note">(${esc(formLabel(c.k, c.p))})</span>`; };
+  const label = (c) => { const l = lang(); return l === "en" ? esc(formLabel(c)) : `<span class="${l === "ur" ? "ur" : ""}" lang="${l}">${esc(formLabel(c, l))}</span> <span class="note">(${esc(formLabel(c))})</span>`; };
+  const POS = [["V", "Verbs"], ["N", "Nouns"], ["VN", "Both"]];
   let c = null;
   const setup = (msg) => {
     c = null;
     app.innerHTML = `<div class="row"><a class="btn" href="#/s/${n}">← ${esc(d.en)}</a></div>
       <section class="card practise-setup">
         <h2>Form Switch · ${esc(d.en)}</h2>
-        <p class="note">${msg || "Each verb from the āyāt is shown as the Quran says it. Turn it into another person or tense: for example يَعْمَلُونَ “they do” becomes تَعْمَلُونَ “you all do”."}</p>
+        <p class="note">${msg || "Each word from the āyāt is shown as the Quran says it. Turn a verb into another person or tense (يَعْمَلُونَ “they do” → تَعْمَلُونَ “you all do”), or a noun into another number or case (مُؤْمِنٌ “a believer” → مُؤْمِنُونَ “believers”)."}</p>
         <div class="range"><label>From āyah <input id="pf" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.from}"></label>
           <label>to <input id="pt" type="number" inputmode="numeric" min="1" max="${last}" value="${opt.to}"></label></div>
         <div class="row"><span>Labels in</span>${quizLangHTML(all) || `<span class="note">English</span>`}</div>
-        <div class="row"><span>Verbs</span><div class="seg" aria-label="How many verbs">${LENGTHS.map((l) => `<button data-len="${l}" aria-pressed="${opt.len === l}">${l || "All"}</button>`).join("")}</div></div>
+        <div class="row"><span>Words</span><div class="seg" aria-label="Which words">${POS.map(([k, l]) => `<button data-pos="${k}" aria-pressed="${opt.pos === k}">${l}</button>`).join("")}</div></div>
+        <div class="row"><span>How many</span><div class="seg" aria-label="How many words">${LENGTHS.map((l) => `<button data-len="${l}" aria-pressed="${opt.len === l}">${l || "All"}</button>`).join("")}</div></div>
         <button class="btn primary" id="fgo">Start</button>
       </section>`;
   };
   const start = async () => {
-    // one question per verb (base word), loading each verb's table until the round is full
+    // one question per base word, loading each word's forms until the round is full
     const byLemma = new Map();
-    for (const w of verbs) if (w.a >= opt.from && w.a <= opt.to) { if (!byLemma.has(w.l)) byLemma.set(w.l, []); byLemma.get(w.l).push(w); }
+    for (const w of usable) if (w.a >= opt.from && w.a <= opt.to && opt.pos.includes(w.pos)) { if (!byLemma.has(w.l)) byLemma.set(w.l, []); byLemma.get(w.l).push(w); }
     const cand = [...byLemma.values()].map((occ) => occ[Math.floor(Math.random() * occ.length)]).sort(() => Math.random() - 0.5);
     const want = opt.len || cand.length, deck = [];
     $("#fgo").textContent = "Loading…";
     for (let i = 0; i < cand.length && deck.length < want; i += 12) {
       const got = await Promise.all(cand.slice(i, i + 12).map(async (w) => {
-        const e = (await formsOf(w.r || "=" + norm(w.l)))[w.l], from = switchFrom(e, w.g);
-        return from ? { w, e, from } : null;
+        const fd = await formsOf(w.r || "=" + norm(w.l));
+        return switchQuestion(fd, w) ? { w, fd } : null;
       }));
       deck.push(...got.filter(Boolean));
     }
-    if (!deck.length) return setup("No verbs with a regular table in those āyāt. Choose other āyāt.");
+    if (!deck.length) return setup("No words with enough forms in those āyāt. Choose other āyāt, or Both.");
     c = { deck: deck.slice(0, want), i: 0, asked: 0, right: 0, honey: 0, missed: [] };
     ask();
   };
   const ask = () => {
     const it = c.deck[c.i];
-    c.q = { ...it, ...switchQuestion(it.e, it.from), marks: {}, done: false, fb: "" };
+    c.q = { ...it, ...switchQuestion(it.fd, it.w), marks: {}, done: false, fb: "" };
     if (!c.q.to) { c.i++; return c.i < c.deck.length ? ask() : summary(false); }
     draw();
   };
   const draw = () => {
-    const { w, from, to, opts, marks, done, fb } = c.q, a = d.ayahs.find((x) => x.n === w.a), [pat, hint] = trickOf(to.k, to.p);
-    app.innerHTML = `<div class="row"><span class="note">Verb ${c.i + 1} of ${c.deck.length}</span><span class="row">${quizLangHTML(all)}<button class="btn" id="quit">Quit</button></span></div>
+    const { w, from, to, opts, marks, done, fb } = c.q, a = d.ayahs.find((x) => x.n === w.a), [pat, hint] = trickOf(to, from);
+    app.innerHTML = `<div class="row"><span class="note">Word ${c.i + 1} of ${c.deck.length}</span><span class="row">${quizLangHTML(all)}<button class="btn" id="quit">Quit</button></span></div>
       <div class="track"><div class="fill" style="width:${Math.round((c.i / c.deck.length) * 100)}%"></div></div>
       <section class="card quiz fswitch">
         <div class="note">${w.s}:${w.a} · ${esc(meaningOf(w, lang()))}</div>
@@ -948,8 +951,8 @@ async function formSwitch(n, range) {
         <div class="to">Change it to: <strong>${label(to)}</strong></div>
         <div class="opts">${opts.map((o, i) => `<button class="opt ar${marks[i] ? " " + marks[i] : ""}" data-o="${i}" style="font-size:26px">${done ? formHL(o.t, from.t) : esc(o.t)}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
-        ${done ? `<div class="trick"><span class="ar pat" dir="rtl">${esc(pat)}</span> <span>${esc(hint)}</span></div>
-          <button class="btn primary" id="next">${c.i + 1 < c.deck.length ? "Next verb" : "See my score"}</button>` : ""}
+        ${done ? `<div class="trick">${pat ? `<span class="ar pat" dir="rtl">${esc(pat)}</span> ` : ""}<span>${esc(hint)}</span></div>
+          <button class="btn primary" id="next">${c.i + 1 < c.deck.length ? "Next word" : "See my score"}</button>` : ""}
       </section>`;
   };
   const summary = (quit) => {
@@ -970,6 +973,8 @@ async function formSwitch(n, range) {
     if (!c) {
       const lb = e.target.closest("[data-len]");
       if (lb) { opt.len = +lb.dataset.len; app.querySelectorAll("[data-len]").forEach((b) => b.setAttribute("aria-pressed", b === lb)); return; }
+      const pb = e.target.closest("[data-pos]");
+      if (pb) { opt.pos = pb.dataset.pos; store.set("switchPos", opt.pos); app.querySelectorAll("[data-pos]").forEach((b) => b.setAttribute("aria-pressed", b === pb)); return; }
       if (e.target.id === "fgo" && e.target.textContent === "Start") {
         let f = Math.min(Math.max(1, +$("#pf").value || 1), last), to = Math.min(Math.max(1, +$("#pt").value || f), last);
         if (f > to) [f, to] = [to, f];
@@ -1020,7 +1025,7 @@ function about() {
     <div class="card how"><h2>Practice and quizzes</h2>
       <p><strong>Practise this sūrah</strong> (or <em>Practise āyāt X–Y</em> under any āyah): choose the āyāt and how many words, then pick each word's meaning. Every right answer moves the word one step: learning, almost, known. Its meaning fades in the reader as it moves up.</p>
       <p><strong>Root challenge</strong> (optional, harder): choose the root of each word, then its deep meaning from the classical dictionaries.</p>
-      <p><strong>Form Switch</strong>: a verb from the āyāt, such as يَعْمَلُونَ "they do", is turned into another person or tense ("you all do?" → تَعْمَلُونَ). Pick the right form and see the trick that makes it.</p>
+      <p><strong>Form Switch</strong>: a word from the āyāt is turned into another form. A verb such as يَعْمَلُونَ "they do" changes person or tense ("you all do?" → تَعْمَلُونَ); a noun changes number or case (one, two, many; doer, object, after a preposition). Pick the right form and see the trick that makes it.</p>
       <p><strong>Honeycomb</strong>: answer words to fill a path across the comb and collect honey. <em>Two teams</em> plays a race on one screen for a class.</p>
       <p><strong>Your progress</strong>: each sūrah shows the share of its words you know, with a lighter bar for words on their way (every right answer fills it a little), and the home page shows the whole Quran. A word you know counts wherever it occurs.</p></div>
     <div class="card">
