@@ -57,9 +57,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 33; // keep in step with VERSION in sw.js
+const VERSION_NO = 34; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  34: ["Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
   33: ["Form Switch: a new quiz that turns each word into another form: a verb into another person or tense, a noun into one, two or many (on every sūrah page).", "Two teams in Honeycomb can now ask word forms too.", "Word forms on the word card: how each verb and noun changes, with the easy trick for each.", "This notice, so you know when the app has updated."],
   32: ["Āyah translations under each āyah in English, Urdu and Hindi."],
 };
