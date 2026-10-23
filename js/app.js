@@ -1156,7 +1156,8 @@ function toast(html, onGo) {
   const used = seen || !FIRST_VISIT;
   if (seen < VERSION_NO && used) {
     const news = Object.keys(CHANGES).map(Number).filter((v) => v > (seen || VERSION_NO - 1)).sort((a, b) => b - a).flatMap((v) => CHANGES[v]);
-    toast(`<strong>Updated to version ${VERSION_NO}</strong>${news.length ? `<ul>${news.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}<button class="btn primary" id="toastgo">OK</button>`);
+    // a version with no line in CHANGES (nothing you would see) updates quietly
+    if (news.length) toast(`<strong>Updated to version ${VERSION_NO}</strong><ul>${news.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><button class="btn primary" id="toastgo">OK</button>`);
   }
   raw.set("seenVersion", VERSION_NO);
 }
