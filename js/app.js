@@ -57,7 +57,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 34; // keep in step with VERSION in sw.js
+const VERSION_NO = 35; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
   34: ["The Word forms section on the word card is now a clear button: tap Show to open it.", "Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
@@ -450,7 +450,7 @@ async function home() {
   app.innerHTML = `
     <section class="progress">
       <div class="eyebrow">Course · the whole Quran · 114 sūrahs · ${total.toLocaleString()} words</div>
-      <h1>Read the Quran without a translation</h1>
+      <h1>Learn to read the Quran without translation</h1>
       <p class="sub">Each word's meaning sits under it and fades as you learn it. Practise, and watch the page turn into plain Arabic. <a href="#/about">How to learn</a></p>
       <div class="row"><span>Words of the Quran you know</span><strong>${p.all.pct}%</strong></div>
       <div class="track">${barHTML(p.all)}</div>
