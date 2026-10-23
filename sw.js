@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached on install; data and fonts are cached as they are used.
-const VERSION = "qwr-v31";
-const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/hive.js", "manifest.webmanifest", "data/surahs.json", "icons/icon.svg", "icons/icon-192.png"];
+const VERSION = "qwr-v33";
+const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/hive.js", "js/forms.js", "manifest.webmanifest", "data/surahs.json", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   // "reload" skips the browser's own HTTP cache, which can still hold the previous version for a few minutes
