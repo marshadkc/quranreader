@@ -60,7 +60,7 @@ const LABEL = ["new", "learning", "almost", "known"];
 const VERSION_NO = 34; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
-  34: ["Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
+  34: ["The Word forms section on the word card is now a clear button: tap Show to open it.", "Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
   33: ["Form Switch: a new quiz that turns each word into another form: a verb into another person or tense, a noun into one, two or many (on every sūrah page).", "Two teams in Honeycomb can now ask word forms too.", "Word forms on the word card: how each verb and noun changes, with the easy trick for each.", "This notice, so you know when the app has updated."],
   32: ["Āyah translations under each āyah in English, Urdu and Hindi."],
 };
@@ -378,7 +378,7 @@ function sheetHTML(w, idx) {
       <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc(spaced(w.r))}</span>` : "None"}
       ${w.r ? `<div class="core" data-root="${esc(w.r)}"></div>` : ""}
       ${fam.length ? `<div class="note">Same root here: <span class="ar" style="font-size:20px">${fam.map(esc).join("، ")}</span></div>` : ""}</dd></dl>
-    ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(w.r || "=" + norm(w.l))}" ${raw.get("formsOpen", false) ? "open" : ""}><summary>Word forms: ${w.pos === "V" ? "how this verb changes" : "how this word changes"}</summary><div class="fbody note">Loading…</div></details>` : ""}
+    ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(w.r || "=" + norm(w.l))}" ${raw.get("formsOpen", false) ? "open" : ""}><summary><span class="lbl">Word forms<br><span class="note">${w.pos === "V" ? "How this verb changes: he, they, you… with the tricks" : "How this word changes: one, two, many…"}</span></span></summary><div class="fbody note">Loading…</div></details>` : ""}
     <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
       <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
       <button class="btn" data-act="close">Close</button></div></div>`;
