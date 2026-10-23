@@ -1,6 +1,7 @@
 // Quran Word Reader: sūrah sidebar, reader with fading meanings, āyah and word search,
 // practice quiz, word parts and the Ayah Honeycomb.
 import { renderHive } from "./hive.js";
+import { formsOf, formsHTML } from "./forms.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -369,6 +370,7 @@ function sheetHTML(w, idx) {
       <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc(spaced(w.r))}</span>` : "None"}
       ${w.r ? `<div class="core" data-root="${esc(w.r)}"></div>` : ""}
       ${fam.length ? `<div class="note">Same root here: <span class="ar" style="font-size:20px">${fam.map(esc).join("، ")}</span></div>` : ""}</dd></dl>
+    ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(key)}" ${raw.get("formsOpen", false) ? "open" : ""}><summary>Word forms: ${w.pos === "V" ? "how this verb changes" : "how this word changes"}</summary><div class="fbody note">Loading…</div></details>` : ""}
     <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
       <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
       <button class="btn" data-act="close">Close</button></div></div>`;
@@ -393,6 +395,17 @@ function readingClick(e, idx) {
     btns().forEach((b) => b.classList.toggle("sel", +b.dataset.k === k));
     view.sel = k;
     $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
+    const fd = $("#sheetbox .forms");
+    if (fd) {
+      const w = view.ws[k];
+      const fill = () => formsOf(fd.dataset.fkey).then((d) => {
+        if (!fd.isConnected) return;
+        const h = formsHTML(d, w, state.langs);
+        if (h) fd.querySelector(".fbody").outerHTML = `<div class="fbody">${h}</div>`; else fd.remove();
+      });
+      fd.ontoggle = () => raw.set("formsOpen", fd.open);
+      fill();
+    }
     const box = $("#sheetbox .core");
     if (box) {
       const r = box.dataset.root;

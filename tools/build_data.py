@@ -275,7 +275,7 @@ def word_entry(segs):
             merged.append(p)
     lem = stem[2].get("LEM") or "".join(x[0] for x in segs)
     stem_text = "".join(p[0] for p in merged if p[1] == "s")
-    return {
+    out = {
         "_stem": stem_text,
         "t": "".join(x[0] for x in segs),
         "p": merged,
@@ -283,6 +283,31 @@ def word_entry(segs):
         "r": stem[2].get("ROOT", ""),
         "pos": stem[1] if stem[1] != "N" else ("PN" if "PN" in stem[2]["tags"] else "N"),
     }
+    g = grammar(stem[1], stem[2])
+    if g:
+        out["g"] = g
+    return out
+
+
+TENSE = {"PERF": "past", "IMPF": "pres", "IMPV": "cmd"}
+
+
+def grammar(pos, f):
+    """The word's place in its Word forms table: verbs "pres.3MP" (+ ".SUBJ", ".JUS", ".PASS"), nouns "MP.NOM"."""
+    tags = f["tags"]
+    if pos == "V":
+        tense = next((TENSE[t] for t in tags if t in TENSE), None)
+        person = next((t for t in tags if t[:1] in "123"), None)
+        if not tense or not person:
+            return None
+        person = {"2MD": "2D", "2FD": "2D"}.get(person, person)
+        mood = f.get("MOOD")
+        return ".".join([tense, person] + ([mood] if mood in ("SUBJ", "JUS") else []) + (["PASS"] if "PASS" in tags else []))
+    if pos == "N" and not ({"PRON", "DEM", "REL", "PN"} & set(tags)):
+        num = next((t for t in tags if t in ("MS", "FS", "MD", "FD", "MP", "FP", "M", "F", "D", "P")), None)
+        case = next((t for t in tags if t in ("NOM", "ACC", "GEN")), None)
+        return ".".join(x for x in (num, case) if x) or None
+    return None
 
 
 def load_glosses(s):
