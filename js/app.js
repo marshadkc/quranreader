@@ -57,7 +57,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 35; // keep in step with VERSION in sw.js
+const VERSION_NO = 36; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
   35: ["The home page now says: Learn to read the Quran without translation."],
@@ -1156,7 +1156,8 @@ function toast(html, onGo) {
   const used = seen || !FIRST_VISIT;
   if (seen < VERSION_NO && used) {
     const news = Object.keys(CHANGES).map(Number).filter((v) => v > (seen || VERSION_NO - 1)).sort((a, b) => b - a).flatMap((v) => CHANGES[v]);
-    toast(`<strong>Updated to version ${VERSION_NO}</strong>${news.length ? `<ul>${news.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}<button class="btn primary" id="toastgo">OK</button>`);
+    // a version with no line in CHANGES (nothing you would see) updates quietly
+    if (news.length) toast(`<strong>Updated to version ${VERSION_NO}</strong><ul>${news.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><button class="btn primary" id="toastgo">OK</button>`);
   }
   raw.set("seenVersion", VERSION_NO);
 }

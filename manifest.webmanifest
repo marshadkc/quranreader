@@ -1,7 +1,7 @@
 {
   "name": "Quran Word Reader",
   "short_name": "Quran Words",
-  "description": "Read the Quran word by word until you understand the Arabic without a translation.",
+  "description": "Learn to read the Quran word by word until you understand the Arabic without translation.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
