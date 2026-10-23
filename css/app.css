@@ -287,7 +287,15 @@ h1 small.note{font-size:14px;font-weight:400}
 }
 /* Word forms on the word card */
 .forms{border-top:1px solid var(--line);padding-top:8px}
-.forms summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent)}
+.forms summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--accent);list-style:none;display:flex;align-items:center;gap:10px;justify-content:space-between;
+  border:1.5px solid var(--accent);border-radius:12px;padding:10px 14px;background:var(--part-soft);user-select:none}
+.forms summary::-webkit-details-marker{display:none}
+.forms summary::before{content:"🔀";font-size:18px}
+.forms summary .lbl{flex:1}
+.forms summary::after{content:"Show ▾";flex:none;font-size:13px;background:var(--accent);color:var(--surface);border-radius:999px;padding:4px 12px}
+.forms[open] summary::after{content:"Hide ▴"}
+.forms summary:hover{filter:brightness(1.04)}
+.forms summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .forms .fbody{margin-top:8px;display:flex;flex-direction:column;gap:6px}
 .ftitle{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-top:6px}
 .ftab{width:100%;border-collapse:collapse;font-size:13px}

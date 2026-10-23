@@ -202,8 +202,8 @@ export async function renderHive(app) {
   // answering a fresh word for it, so no route is ever safe. The first team to join its two edges wins.
   const TEAMS = [{ name: "Team A", cls: "a" }, { name: "Team B", cls: "b" }];
   const names = () => store.get("teamNames", TEAMS.map((x) => x.name));
-  // what the cells ask: meanings only, or Form Switch for verbs (set before the match)
-  const ASK = [["m", "Meanings"], ["mf", "Meanings + verb forms"]], ask = () => store.get("teamAsk", "m");
+  // what the cells ask: meanings only, or meanings and Form Switch in turn (set before the match)
+  const ASK = [["m", "Meanings"], ["mf", "Meanings + Form Switch"]], ask = () => store.get("teamAsk", "m");
   // A hexagon of 37 cells, seven across the middle row; each row's end cells make up the side edges.
   const TR = 3;
   const board0 = () => comb(TR).map((c) => ({ ...c, k: c.r + "," + c.q, row: c.r, col: c.q }));
@@ -232,7 +232,7 @@ export async function renderHive(app) {
     const first = store.get("teamFirst", 0); store.set("teamFirst", 1 - first); // the first move helps, so the teams take it in turn
     const board = new Map(order.map((c, i) => [c.k, { c, no: i + 1, w: list[i], own: null, white: false }]));
     return { srcKey, board, spare: list.slice(cells.length), ready: false, turn: first, first, pick: null, opts: [], last: null, over: null, fresh: true,
-      teams: TEAMS.map((x, i) => ({ ...x, name: names()[i] || x.name, right: 0, missed: [], route: [] })) };
+      teams: TEAMS.map((x, i) => ({ ...x, name: names()[i] || x.name, right: 0, missed: [], route: [], formNext: false })) };
   }
   // would taking this cell give the team three of its cells in a straight line along its way across?
   // Team A may not run three side by side in a row; Team B may not run three down one diagonal.
@@ -302,7 +302,7 @@ export async function renderHive(app) {
         panel = `<div><strong>Name the teams</strong></div><div class="names">${t.teams.map((tm, i) => `<label class="team t${tm.cls}">Team ${i + 1}<input id="tn${i}" maxlength="20" value="${esc(tm.name)}" autocomplete="off"></label>`).join("")}</div>
           <div class="note">Each cell hides a word. ${esc(t.teams[0].name)} builds from the right edge to the left, ${esc(t.teams[1].name)} from the top edge to the bottom, so your routes must cross. Each cell shows the first letter of its word. Take turns choosing a cell: first on your starting edge, then touching the last cell you took; answer right to take it, while a wrong answer turns it white with a new hidden word. ${esc(t.teams[0].name)} may not hold three cells side by side in one row, and ${esc(t.teams[1].name)} not three down one slant. You may also steal a cell of the other team next to your last cell by answering a new word for it. First to join both its edges wins. ${esc(t.teams[t.turn].name)} goes first.</div>
           <div class="row"><span>Questions</span><div class="seg" aria-label="Questions">${ASK.map(([k, l]) => `<button data-ask="${k}" aria-pressed="${ask() === k}">${l}</button>`).join("")}</div></div>
-          ${ask() === "mf" ? `<div class="note">Verbs ask Form Switch: change the verb to another person or tense. Other words ask their meaning.</div>` : ""}
+          ${ask() === "mf" ? `<div class="note">Each team gets a meaning question and a Form Switch question in turn: change a verb to another person or tense, or a noun to one, two or many. When a cell's word has no forms to switch (a small word like فِي), it asks the meaning, and that team's next question is Form Switch.</div>` : ""}
           <button class="btn primary" id="tgo">Start the match</button>`;
       } else if (t.over) {
         const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => w.fq ? `<div class="mrow"><span class="ar">${esc(w.fq.from.t)} → ${esc(w.fq.to.t)}</span><span>${esc(formLabel(w.fq.to))}</span></div>` : `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
@@ -347,15 +347,20 @@ export async function renderHive(app) {
         // a steal is asked with a fresh word: the cell's own word is already showing
         const w = x.own === null ? x.w : t.spare.pop() || distract[Math.floor(Math.random() * distract.length)];
         t.pick = b.dataset.tc; t.pickW = w; t.opts = [w, ...distractors(w, distract)].sort(() => Math.random() - 0.5); t.last = null; t.fq = null;
-        if (ask() === "mf" && w.pos === "V") {
+        // with Form Switch on, each team's questions go meaning, form, meaning, form…; a word with no forms
+        // to switch asks its meaning and keeps the form question for the team's next turn
+        const tm = t.teams[t.turn];
+        if (ask() === "mf" && tm.formNext && (w.pos === "V" || w.pos === "N") && w.g) {
           const pick = t.pick; t.fq = "wait";
-          return formsOf(w.r || "=" + norm(w.l)).then((fd) => { if (t.pick === pick) { t.fq = switchQuestion(fd, w); tdraw(); } }, () => { if (t.pick === pick) { t.fq = null; tdraw(); } });
+          const done = (q) => { if (t.pick !== pick) return; t.fq = q || null; tdraw(); };
+          return formsOf(w.r || "=" + norm(w.l)).then((fd) => done(switchQuestion(fd, w)), () => done(null));
         }
         return tdraw();
       }
       if (b.dataset.to !== undefined && t.pick !== null && t.fq !== "wait") {
         const cur = t.teams[t.turn], x = t.board.get(t.pick), w = t.pickW, fq = t.fq, steal = x.own !== null;
         const ok = fq ? fq.opts[+b.dataset.to] === fq.to : t.opts[+b.dataset.to] === w;
+        if (ask() === "mf") cur.formNext = !fq;
         t.pick = null; t.fq = null; t.last = { ok, w, fq, no: cellName(x), who: cur.name, steal, owner: steal ? t.teams[x.own].name : "" };
         if (ok) { x.own = t.turn; x.w = w; cur.right++; cur.route.push(x.c.k); }
         else { cur.missed.push(fq ? { fq } : w); if (!steal) { x.white = true; x.w = t.spare.pop() || distract[Math.floor(Math.random() * distract.length)]; } }
