@@ -55,7 +55,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 31; // keep in step with VERSION in sw.js
+const VERSION_NO = 32; // keep in step with VERSION in sw.js
 
 // ---------- data ----------
 let INDEX = null, ROOTS = null, FORMS = null, CORE = null;
@@ -370,7 +370,7 @@ function sheetHTML(w, idx) {
       <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc(spaced(w.r))}</span>` : "None"}
       ${w.r ? `<div class="core" data-root="${esc(w.r)}"></div>` : ""}
       ${fam.length ? `<div class="note">Same root here: <span class="ar" style="font-size:20px">${fam.map(esc).join("، ")}</span></div>` : ""}</dd></dl>
-    ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(key)}" ${raw.get("formsOpen", false) ? "open" : ""}><summary>Word forms: ${w.pos === "V" ? "how this verb changes" : "how this word changes"}</summary><div class="fbody note">Loading…</div></details>` : ""}
+    ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(w.r || "=" + norm(w.l))}" ${raw.get("formsOpen", false) ? "open" : ""}><summary>Word forms: ${w.pos === "V" ? "how this verb changes" : "how this word changes"}</summary><div class="fbody note">Loading…</div></details>` : ""}
     <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
       <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
       <button class="btn" data-act="close">Close</button></div></div>`;

@@ -22,24 +22,28 @@ const WHO = {
   "2D": ["you two", "تم دو", "तुम दो"], "2MP": ["you all (m)", "تم سب (مرد)", "तुम सब (मर्द)"],
   "2FP": ["you all (f)", "تم سب (عورتیں)", "तुम सब (औरतें)"], "1S": ["I", "میں", "मैं"], "1P": ["we", "ہم", "हम"],
 };
-// The trick: what to add or change, shown with the letters themselves. Present tense is read from "he" (يـ),
-// past from "he" (bare), command from "you" in the present.
+// The trick for each person: the shape to look for (prefix … ending, read right to left) and a short hint.
+// Present is read from "he" (يـ), past from "he" (the bare form), command from "you" in the present.
 const TRICK = {
   pres: {
-    "3MS": "يـ at the start", "3FS": "يـ → تـ", "3MD": "يـ … ـانِ", "3FD": "تـ … ـانِ", "3MP": "يـ … ـونَ", "3FP": "يـ … ـنَ",
-    "2MS": "تـ (same as she)", "2FS": "تـ … ـينَ", "2D": "تـ … ـانِ", "2MP": "تـ … ـونَ: they يـ → تـ", "2FP": "تـ … ـنَ",
-    "1S": "أَ at the start", "1P": "نـ at the start",
+    "3MS": ["يـ … ـُ", "starts with يـ"], "3FS": ["تـ … ـُ", "يـ becomes تـ"], "3MD": ["يـ … ـَانِ", "two: add ـَانِ"],
+    "3FD": ["تـ … ـَانِ", "تـ and ـَانِ"], "3MP": ["يـ … ـُونَ", "many: add ـُونَ"], "3FP": ["يـ … ـْنَ", "women: add ـْنَ"],
+    "2MS": ["تـ … ـُ", "same as she"], "2FS": ["تـ … ـِينَ", "add ـِينَ"], "2D": ["تـ … ـَانِ", "same as they two (f)"],
+    "2MP": ["تـ … ـُونَ", "they (m) with تـ instead of يـ"], "2FP": ["تـ … ـْنَ", "they (f) with تـ"],
+    "1S": ["أ … ـُ", "starts with أ"], "1P": ["نـ … ـُ", "starts with نـ"],
   },
   past: {
-    "3MS": "the bare form", "3FS": "add ـَتْ", "3MD": "add ـَا", "3FD": "add ـَتَا", "3MP": "add ـُوا", "3FP": "add ـْنَ",
-    "2MS": "add ـْتَ", "2FS": "add ـْتِ", "2D": "add ـْتُمَا", "2MP": "add ـْتُمْ", "2FP": "add ـْتُنَّ", "1S": "add ـْتُ", "1P": "add ـْنَا",
+    "3MS": ["… ـَ", "the bare form"], "3FS": ["… ـَتْ", "add ـَتْ"], "3MD": ["… ـَا", "add ـَا"], "3FD": ["… ـَتَا", "add ـَتَا"],
+    "3MP": ["… ـُوا", "add ـُوا"], "3FP": ["… ـْنَ", "add ـْنَ"], "2MS": ["… ـْتَ", "add ـْتَ"], "2FS": ["… ـْتِ", "add ـْتِ"],
+    "2D": ["… ـْتُمَا", "add ـْتُمَا"], "2MP": ["… ـْتُمْ", "add ـْتُمْ"], "2FP": ["… ـْتُنَّ", "add ـْتُنَّ"],
+    "1S": ["… ـْتُ", "add ـْتُ"], "1P": ["… ـْنَا", "add ـْنَا"],
   },
   cmd: {
-    "2MS": "you-present, drop تـ, end silent (ـْ)", "2FS": "drop تـ and ن: ـِي", "2D": "drop تـ and ن: ـَا",
-    "2MP": "drop تـ and ن: ـُوا", "2FP": "drop تـ: ـْنَ",
+    "2MS": ["… ـْ", "you (present): drop تـ, end silent"], "2FS": ["… ـِي", "drop تـ and the ن"], "2D": ["… ـَا", "drop تـ and the ن"],
+    "2MP": ["… ـُوا", "drop تـ and the ن"], "2FP": ["… ـْنَ", "drop تـ"],
   },
 };
-const TENSES = [["pres", "Present: doing, will do", PERSONS], ["past", "Past: did", PERSONS], ["cmd", "Command: do!", CMD]];
+const TENSES = [["pres", "Present: does, is doing, will do", PERSONS], ["past", "Past: did", PERSONS], ["cmd", "Command: do!", CMD]];
 // Forms outside the table, as the Quran uses them
 const MOODS = {
   SUBJ: "after أَنْ، لَنْ، كَيْ: ـُ → ـَ, and ـونَ / ـينَ / ـانِ lose their ن",
@@ -74,31 +78,34 @@ function hl(form, base) {
 
 const who = (p, langs) => {
   const [en, ur, hi] = WHO[p];
-  return `${esc(en)}${langs.includes("ur") ? ` <span class="ur">${esc(ur)}</span>` : ""}${langs.includes("hi") ? ` <span lang="hi">${esc(hi)}</span>` : ""}`;
+  return `${esc(en)}${langs.includes("ur") ? `<span class="ur">${esc(ur)}</span>` : ""}${langs.includes("hi") ? `<span lang="hi">${esc(hi)}</span>` : ""}`;
 };
 const where = (loc) => { const [s, a] = String(loc).split(":"); return `#/s/${s}/${a}`; };
 const quran = (q) => (q ? `<a class="qtag" href="${where(q[1])}" title="Used ${q[0]} times in the Quran; tap to see one">Quran ×${q[0]}</a>` : "");
 
 function verbHTML(e, w, langs) {
   const mine = (w.g || "").split(".").slice(0, 2).join(".");
-  const tables = TENSES.map(([k, title, ps]) => {
+  // the tapped word's tense comes first
+  const tenses = [...TENSES].sort((a, b) => (b[0] === mine.split(".")[0]) - (a[0] === mine.split(".")[0]));
+  const tables = tenses.map(([k, title, ps]) => {
     const forms = e[k] || {};
     if (!ps.some((p) => forms[p])) return "";
     const base = k === "cmd" ? (e.pres || {})["2MS"] : forms["3MS"];
     const rows = ps.filter((p) => forms[p]).map((p) => {
       const q = (e.q || {})[`${k}.${p}`];
-      return `<tr class="${mine === `${k}.${p}` ? "me" : ""}${q ? " inq" : ""}"><td class="who">${who(p, langs)}</td>
-        <td class="ar f">${hl(forms[p], k === "cmd" ? null : base)}</td><td class="tr"><span>${esc(TRICK[k][p])}</span>${quran(q)}</td></tr>`;
+      return `<tr class="${mine === `${k}.${p}` ? "me" : ""}${q ? " inq" : ""}"><td class="pp">${who(p, langs)}</td>
+        <td class="ar f">${hl(forms[p], k === "cmd" ? null : base)}</td><td class="tr"><span class="ar pat" dir="rtl">${esc(TRICK[k][p][0])}</span>${TRICK[k][p][1].startsWith("add ") ? "" : `<span>${esc(TRICK[k][p][1])}</span>`}${quran(q)}</td></tr>`;
     }).join("");
     return `<div class="ftitle">${title}</div><table class="ftab">${rows}</table>`;
   }).join("");
   const extra = (e.qx || []).map(([t, tag, n, loc]) => {
     const [k, p, mood] = tag.split(".");
+    if (mood === "Q") return ""; // Quran words the corpus tags oddly or splits (see tools/forms_report.txt): not shown
     const note = MOODS[mood] || "";
     return `<li><span class="ar">${esc(t)}</span> <span class="note">${esc(WHO[p] ? WHO[p][0] : p)}${k === "past" ? ", past" : ""}${note ? ` · ${esc(note)}` : ""}</span> <a class="qtag" href="${where(loc)}">×${n}</a></li>`;
   }).join("");
   const rel = (e.rel || []).map(([t, kind, n, loc]) => `<li><span class="ar">${esc(t)}</span> <span class="note">${esc(REL[kind] || kind)}</span> <a class="qtag" href="${where(loc)}">×${n}</a></li>`).join("");
-  return `${e.check ? `<p class="note">Some forms of this verb are irregular; the ones marked Quran are spelled as in the Quran.</p>` : ""}
+  return `${e.check ? `<p class="note">Some forms of this verb are irregular; the table shows the regular forms.</p>` : ""}
     ${tables}
     ${extra ? `<div class="ftitle">Also in the Quran</div><ul class="flist">${extra}</ul>` : ""}
     ${rel ? `<div class="ftitle">Nouns from this verb</div><ul class="flist">${rel}</ul>` : ""}`;

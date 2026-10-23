@@ -1,0 +1,64 @@
+Word forms build report (tools/build_forms.py)
+verb lemmas: 1473
+  fully verified (every PERF / IMPF-IND / IMPV active occurrence matches): 1239
+  flagged check=true: 40
+  with no table occurrence (only passive / subjunctive / jussive / energetic): 194
+  table occurrences checked: 15375; mismatching occurrences: 64 in 44 cells
+  subjunctive/jussive occurrences (not in the table) not spelled by the rules: 20
+  lemmas with past unknown: 192, present unknown: 140, command unknown: 140
+noun lemmas: 3145
+files: 1659, total 2.09 MB
+
+Comparison spelling: see cmp_norm() and the docstring of tools/build_forms.py.
+What is left is mostly the corpus, not the rules: two verbs under one lemma (لَبَسَ/لَبِسَ، حَزَنَ/حَزِنَ،
+قَدَمَ/قَدِمَ، حَلَّ يَحِلُّ/يَحُلُّ، هَوَى/هَوِيَ), form IV words tagged VF 1 (أَغْنَىٰ، أَرَىٰ، أَبْقَىٰ), wrong tense or
+person tags (يَسْعَىٰ as PERF, دَعَانِ as 2MS), a merged nūn (تَأْمَ۫نَّا، مَكَّنِّى), and rare Quranic by-forms
+(يَخِصِّمُونَ، يَهِدِّىٓ، ٱدَّٰرَٰٔتُمْ، ٱقْتَدِهْ). None (generated) = the rules could not fix the vowels
+(the cell then shows the Quran spelling); otherwise the cell keeps the rule form and the word is in qx as .Q.
+
+Remaining mismatches: lemma, cell, generated, Quran (count, first place)
+آتَى	pres.1S	أُوتِي	ءَاتَىٰ	4	7:190:2
+أَتَى	pres.2MS	تَأْتِي	ءَاتِيَنَّ	1	7:17:2
+أَتَى	pres.3MP	يَأْتُونَ	يَأْتُو	1	2:85:16
+أَظْهَرَ	past.3MD	أَظْهَرَا	تَظَٰهَرَا	1	28:48:22
+أَغْنَى	past.3MS	None	أَغْنَىٰ	10	7:48:9
+أَمَرَ	pres.2MP	تَأْمُرُونَ	تَأْمُرُوٓ	1	39:64:4
+أَمِنَ	pres.2MS	تَأْمَنُ	تَأْمَ۫نَّ	1	12:11:6
+أَنجَى	pres.1P	نُنْجِي	نُۨجِى	1	21:88:7
+اخْتَصَمُ	pres.3MP	يَخْتَصِمُونَ	يَخِصِّمُونَ	1	36:49:8
+ادّارَأَ	past.2MP	تَدَارَأْتُمْ	ٱدَّٰرَْٰٔتُمْ	1	2:72:4
+اسْتَطاعَ	pres.2MS	تَسْتَطِيعُ	تَسْطِع	1	18:82:33
+اقْتَدِهْ	cmd.2MS	اِقْتَدِ	ٱقْتَدِهْ	1	6:90:6
+اهْتَدَى	pres.3MS	يَهْتَدِي	يَهِدِّىٓ	1	10:35:22
+بَعُدَتْ	past.3FS	بَعِدَتْ	بَعُدَتْ	1	9:42:9
+بَقِيَ	past.3MS	بَقِيَ	أَبْقَىٰ	1	53:51:3
+بَلَوْ	pres.3MS	يَبْلُو	يَبْلَىٰ	1	20:120:13
+تَغَشَّى	pres.3MS	يَتَغَشَّى	تَغَشَّىٰ	1	7:189:13
+تَقَرَّ	cmd.2FP	اِقْرَرْنَ	قَرْنَ	1	33:33:1
+تُفادُ	pres.2MP	تُفَادُونَ	تُفَٰدُو	1	2:85:18
+تُكْوَى	pres.3FS	None	تُكْوَىٰ	1	9:35:7
+جاءَ	past.3MS	جَاءَ	أَجَآءَ	1	19:23:1
+جَعَلَ	past.3MS	جَعَلَ	جَعَلَا	1	7:190:4
+حَلَلْ	cmd.2MS	اِحْلِلْ	ٱحْلُلْ	1	20:27:1
+حَلَلْ	pres.3FS	تَحِلُّ	تَحُلُّ	1	13:31:39
+خاطَبَ	cmd.2MS	خَاطِبْ	تُخَٰطِبْ	1	11:37:6
+دَعا	past.2MS	دَعَوْتَ	دَعَانِ	1	2:186:11
+دَلَّ	past.3MS	دَلَّ	دَلَّىٰ	1	7:22:1
+رَأَى	past.3MS	رَأَى	أَرَىٰ	2	3:152:18
+رَأَى	past.3MS	رَأَى	أَرَىٰكَ	1	8:43:8
+سَعَى	past.3MS	سَعَى	يَسْعَىٰ	1	79:22:3
+صَبَرَ	past.3MS	صَبَرَ	أَصْبَرَ	1	2:175:9
+صَدَّ	pres.3MP	يَصُدُّونَ	يَصِدُّونَ	1	43:57:9
+عَمِيَ	past.3MS	عَمِيَ	أَعْمَىٰٓ	1	47:23:6
+فَطَرَ	pres.3FP	None	يَتَفَطَّرْنَ	2	19:90:3
+قَدِمْ	pres.3MS	None	يَقْدُمُ	1	11:98:1
+لَبَسْ	pres.2MP	تَلْبِسُونَ	تَلْبَسُونَ	2	16:14:12
+لَبَسْ	pres.3MP	يَلْبِسُونَ	يَلْبَسُونَ	2	18:31:15
+لَبِثَ	past.3MP	لَبِثُوا	تَلَبَّثُوا۟	1	33:14:11
+لَمَسُ	past.2MP	لَمَسْتُمْ	لَٰمَسْتُمُ	2	4:43:33
+مَكَّ	past.3MS	مَكَّنَ	مَكَّ	1	18:95:3
+نَهَى	pres.3MS	يَنْهَى	نَهَىٰ	1	59:7:29
+هَوَى	past.3MS	هَوَى	أَهْوَىٰ	1	53:53:2
+هَوَى	pres.3FS	تَهْوِي	تَهْوَى	1	53:23:19
+يَحْزُن	pres.3MS	يَحْزَنُ	يَحْزُنُ	3	6:33:4
+يُنزَفُ	pres.3MP	يُنْزِفُونَ	يُنزَفُونَ	1	37:47:7
