@@ -134,3 +134,37 @@ export function formsHTML(d, w, langs) {
   if (e.forms && e.forms.length) return nounHTML(e, w);
   return null;
 }
+
+// ---------- Form Switch quiz ----------
+// A question turns the Quran word's form (tense and person) into another form of the same verb, with four
+// options from the verb's own table. Only verbs whose table is fully regular (no check flag) are asked.
+const TENSE_NAME = { pres: ["present", "حال", "वर्तमान"], past: ["past", "ماضی", "भूतकाल"], cmd: ["command", "امر", "आदेश"] };
+const LI = { en: 0, ur: 1, hi: 2 };
+export const formLabel = (k, p, lang = "en") => `${WHO[p][LI[lang] ?? 0]} · ${TENSE_NAME[k][LI[lang] ?? 0]}`;
+export const formHL = hl;
+export const trickOf = (k, p) => TRICK[k][p];
+// the tense and person of a Quran word, when the quiz can use it: "pres.3MP" (moods are fine, passive is not)
+export function switchFrom(e, g) {
+  if (!e || e.pos !== "V" || e.check || !g) return null;
+  const [k, p, x] = g.split(".");
+  if (x === "PASS" || !TRICK[k] || !WHO[p] || !(e[k] || {})[p]) return null;
+  return { k, p, t: e[k][p] };
+}
+const shuffle = (a) => a.sort(() => Math.random() - 0.5);
+export function switchQuestion(e, from) {
+  const cells = (k) => (k === "cmd" ? CMD : PERSONS).filter((p) => (e[k] || {})[p]).map((p) => ({ k, p, t: e[k][p] }));
+  const same = cells(from.k).filter((c) => c.t !== from.t);
+  const cross = ["pres", "past", "cmd"].filter((k) => k !== from.k).flatMap(cells).filter((c) => c.t !== from.t);
+  // mostly change the person within the tense, sometimes the tense
+  const pick = (l) => l[Math.floor(Math.random() * l.length)];
+  const sameP = cross.filter((c) => c.p === from.p);
+  const to = (Math.random() < 0.7 && same.length) || !cross.length ? pick(same) : pick(sameP.length ? sameP : cross);
+  if (!to) return null;
+  // wrong options: other cells of the target's tense first (so the person ending decides), then any
+  const seen = new Set([to.t]), opts = [to];
+  for (const c of [...shuffle(cells(to.k)), ...shuffle([...same, ...cross])]) {
+    if (opts.length === 4) break;
+    if (!seen.has(c.t)) { seen.add(c.t); opts.push(c); }
+  }
+  return opts.length < 3 ? null : { from, to, opts: shuffle(opts) };
+}
