@@ -14,6 +14,8 @@ export const RULES = [
   ["md", "Madd", "مدّ", "a long vowel stretched beyond two counts"],
   ["sl", "Silent", "خاموش", "written but not read when joined to the word before"],
 ];
+// the name each para (juz) is known by in Indo-Pak muṣḥafs: its opening words
+const PARA = ["الٓمّٓ", "سیقول", "تلک الرسل", "لن تنالوا", "والمحصنٰت", "لا یحب اللہ", "واذا سمعوا", "ولو اننا", "قال الملا", "واعلموا", "یعتذرون", "وما من دآبۃ", "وما ابرئ", "ربما", "سبحٰن الذی", "قال الم", "اقترب للناس", "قد افلح", "وقال الذین", "امن خلق", "اتل ما اوحی", "ومن یقنت", "وما لی", "فمن اظلم", "الیہ یرد", "حٰمٓ", "قال فما خطبکم", "قد سمع اللہ", "تبٰرک الذی", "عمّ"];
 const BISMILLAH = "بِسۡمِ اللّٰهِ الرَّحۡمٰنِ الرَّحِيۡمِ";
 let IDX = null;
 const PAGES = new Map();
@@ -63,13 +65,15 @@ export async function mushaf(arg, s, a, w) {
     ${tj ? `<div class="legend">${RULES.map(([k, en, ur, what]) => `<a class="chip" href="#/tajweed/${k}" title="${esc(what)}"><i class="t-${k}">●</i> ${en} <span class="ur">${ur}</span></a>`).join("")}<a class="chip guide" href="#/tajweed">What do the colours mean?</a></div>` : ""}
     ${pager("above")}
     <section class="mpage${tj ? " tj" : ""}" dir="rtl" aria-label="Muṣḥaf page ${p}">
-      <header><span class="ar">${suras.map((n) => esc(idx.surahs[n - 1].ar)).join(" · ")}</span><span class="note">Juz ${juz} · ${suras.map((n) => esc(idx.surahs[n - 1].en)).join(" · ")}</span></header>
-      <div class="mlines" id="mlines">${d.l.map((l) => lineHTML(l, idx)).join("")}</div>
-      <footer class="ar">${arN(p)}</footer>
+      <div class="mframe"><div class="mbody">
+        <header><span class="cart">${suras.map((n) => "سورۃ " + esc(idx.surahs[n - 1].ar)).join(" · ")}</span><span class="cart">پارہ ${arN(juz)} · ${PARA[juz - 1]}</span></header>
+        <div class="mlines" id="mlines">${d.l.map((l) => lineHTML(l, idx)).join("")}</div>
+        <footer><span class="cart">${arN(p)}</span></footer>
+      </div></div>
     </section>
     ${pager("below")}
     <div id="sheetbox"></div>
-    <p class="note">Swipe or use the arrow keys to turn the page. Tap a word for its word card.</p>
+    <p class="note">Juz ${juz} · ${suras.map((n) => esc(idx.surahs[n - 1].en)).join(" · ")}. Swipe or use the arrow keys to turn the page. Tap a word for its word card.</p>
     <p class="note credit">Page layout: the Indo-Pak 15-line ḥifẓ muṣḥaf (Qudratullah), from QUL (Tarteel's Quranic Universal Library). Indo-Pak text and tajweed marks from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>; font: AlQuran IndoPak by QuranWBW.</p>`;
   fit();
   if (document.fonts) document.fonts.ready.then(fit);

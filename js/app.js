@@ -3,6 +3,7 @@
 import { renderHive } from "./hive.js";
 import { formsOf, formsHTML, formLabel, formHL, trickOf, switchQuestion } from "./forms.js";
 import { mushaf, tajweedGuide } from "./mushaf.js";
+import { deva } from "./translit.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -34,7 +35,14 @@ export const state = {
   level: store.get("shape", null),     // word shape (shapeKey) -> 0 new, 1 learning, 2 almost, 3 known
   honey: store.get("honey", 0),
   combo: 0,
+  script: store.get("script", "ar"),  // the word itself in Arabic letters, Hindi letters (transliteration), or both
 };
+// A word as the reader asked to see it: Arabic, its sound in Hindi letters, or both
+const wordFace = (w) => `<span class="face">${state.script !== "hi" ? `<span class="ar">${arHTML(w)}</span>` : ""}${state.script !== "ar" ? `<span class="dv" lang="hi">${esc(deva(w.t))}</span>` : ""}</span>`;
+// under the big Arabic word on the card and in quizzes, when the reader uses Hindi letters
+const dvLine = (w) => (state.script !== "ar" ? `<div class="dv big" lang="hi">${esc(deva(w.t))}</div>` : "");
+const SCRIPTS = [["ar", "عربی"], ["hi", "हिंदी लिपि"], ["both", "Both"]];
+const scriptHTML = () => `<div class="seg" aria-label="Show the words in">${SCRIPTS.map(([k, n]) => `<button data-script="${k}" aria-pressed="${state.script === k}">${n}</button>`).join("")}</div>`;
 // A word's level belongs to its shape: the base word as written without vowels, case endings, prefixes or
 // attached pronouns, but with a verb's subject ending (he / they denied). So رَبُّ, رَبِّكَ and وَرَبُّنَا share one level, but the plural أَرْبَابًا is a new shape to learn
 // where it occurs. Must match shape_key() in tools/build_shapes.py.
@@ -58,9 +66,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 38; // keep in step with VERSION in sw.js
+const VERSION_NO = 39; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  39: ["🌙 / ☀️ at the top switches between dark and light, whatever your phone is set to.", "Words in Hindi letters: above the āyāt, pick हिंदी लिपि to see how each Arabic word sounds written in Hindi, or Both to see it under the Arabic.", "Mushaf pages now have a printed muṣḥaf's blue border, with the sūrah, para and page in frames."],
   38: ["Read in Mushaf now uses the 15-line ḥifẓ muṣḥaf (610 pages, every page ends on an āyah).", "Mushaf: tapping a word opens its word card right on the page, and Close brings you back to the same page.", "Mushaf: the page buttons sit just above and below the page.", "Tajweed colours guide: in the Mushaf, tap a colour or \"What do the colours mean?\" to see how each rule is read, with examples you can open on their page."],
   37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd). Tap a word there for its meaning and its word card.", "Every place a word occurs: each āyah now has buttons to go to it in the sūrah or in the Mushaf.", "Word card: 📖 In the Mushaf shows the word on its muṣḥaf page."],
   35: ["The home page now says: Learn to read the Quran without translation."],
@@ -252,7 +261,7 @@ let view = { ws: [], sel: null, prog: null };
 
 function wordHTML(w, k, idx) {
   const pl = w.p.filter((x) => x[1] !== "s").map((x) => (idx.parts[x[2]] || {}).en).filter((x) => x && x !== "—");
-  return `<button class="w lv${hasMeaning(w) ? lv(w) : 0}" data-k="${k}"><span class="ar">${arHTML(w)}</span>
+  return `<button class="w lv${hasMeaning(w) ? lv(w) : 0}" data-k="${k}">${wordFace(w)}
     <span class="gl">${pl.length ? `<span class="parts">${esc(pl.join(" + "))}</span>` : ""}${w.en ? `<span class="en">${esc(w.en)}</span>` : ""}${w.ur ? `<span class="ur">${esc(w.ur)}</span>` : ""}${hiSpan(w)}</span></button>`;
 }
 // Hindi under a word; where Quran.com has none (small words like مِن), the English, hidden when English shows anyway
@@ -376,7 +385,7 @@ function sheetHTML(w, idx) {
   return `<div class="sheet" id="sheet">
     <div class="top2"><div><div class="eyebrow">${w.s}:${w.a} · word ${w.i + 1} · ${LABEL[lv(w)]}</div>
       <div><strong>${esc(w.en || "Meaning not added yet")}</strong></div>${sheetLangs().filter((l) => l !== "en" && w[l]).map((l) => `<div class="${l}" lang="${l}">${esc(w[l])}</div>`).join("")}</div>
-      <div class="ar big">${arHTML(w)}</div></div>
+      <div><div class="ar big">${arHTML(w)}</div>${dvLine(w)}</div></div>
     <dl class="kv"><dt>Parts</dt><dd>${parts}</dd>
       <dt>Base word</dt><dd><span class="ar" style="font-size:22px">${esc(w.l)}</span> <span class="note">· ${w.f} times in the Quran</span></dd>
       <dt>Root</dt><dd>${w.r ? `<span class="ar" style="font-size:22px">${esc(spaced(w.r))}</span>` : "None"}
@@ -397,6 +406,14 @@ function readingClick(e, idx) {
     lb.closest(".seg").outerHTML = langHTML(view.ws);
     $("#verses").className = "verses" + versesClass(view.ws);
     app.querySelectorAll(".peek").forEach((x) => x.classList.remove("peek"));
+    return;
+  }
+  const sb = e.target.closest("[data-script]");
+  if (sb) {
+    state.script = sb.dataset.script; store.set("script", state.script);
+    sb.closest(".seg").outerHTML = scriptHTML();
+    app.querySelectorAll(".w").forEach((b) => { b.querySelector(".face").outerHTML = wordFace(view.ws[+b.dataset.k]); });
+    if (view.sel !== null) showCard(view.sel, idx);
     return;
   }
   // Meanings hidden: the first tap on a word, or on an āyah's translation, shows just that one
@@ -499,7 +516,7 @@ async function reader(n, focus) {
       <div class="row" id="prog"></div>
       <div class="track">${barHTML({ pct: 0, way: 0 }, "progfill")}</div>
     </section>
-    <div class="row"><span class="row">${langHTML(ws)}<a class="btn mushaf-btn" href="#/mushaf/s/${n}/${focus || 1}">📖 Read in Mushaf</a></span>
+    <div class="row"><span class="row">${langHTML(ws)}${scriptHTML()}<a class="btn mushaf-btn" href="#/mushaf/s/${n}/${focus || 1}">📖 Read in Mushaf</a></span>
       ${ready ? `<span class="row"><a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a><a class="btn" href="#/s/${n}/roots">Root challenge</a><a class="btn" href="#/s/${n}/forms">Form Switch</a></span>` : ""}</div>
     ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
     ${versesHTML(d.ayahs, idx, n)}
@@ -527,7 +544,7 @@ async function ayahView(s, a, w) {
       <div class="eyebrow">Sūrah ${s} · āyah ${a} of ${meta.ayahs} · ${ay.w.length} words</div>
       <div class="row"><h1>${esc(meta.en)} ${s}:${a}</h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
     </section>
-    <div class="row">${langHTML(ay.w)}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
+    <div class="row">${langHTML(ay.w)}${scriptHTML()}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
     ${versesHTML([ay], idx)}
     ${fromQuranCom(d) ? CREDIT : ""}
     <div class="row">${nav(prev, `← ${prev ? prev.join(":") : ""}`)}<a class="btn" href="#/search">Search again</a>${nav(next, `${next ? next.join(":") : ""} →`)}</div>`;
@@ -750,7 +767,7 @@ async function practise(n, range) {
       <div class="track"><div class="fill" style="width:${Math.round((Math.min(r.i, r.total) / r.total) * 100)}%"></div></div>
       <section class="card quiz">
         <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w)]}</div>
-        <div class="ar big">${arHTML(w)}</div>
+        <div class="ar big">${arHTML(w)}</div>${dvLine(w)}
         <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
         <div class="opts">${opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
@@ -854,7 +871,7 @@ async function rootChallenge(n, range) {
       <div class="track"><div class="fill" style="width:${Math.round(((c.i * 2 + step - 1) / (c.deck.length * 2)) * 100)}%"></div></div>
       <section class="card quiz">
         <div class="note">${w.s}:${w.a} · ${esc(meaningOf(w, lang()))}</div>
-        <div class="ar big">${arHTML(w)}</div>
+        <div class="ar big">${arHTML(w)}</div>${dvLine(w)}
         <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
         ${step === 2 ? `<div>The root <span class="ar" style="font-size:26px">${esc(spaced(w.r))}</span> means…</div>` : ""}
         <div class="opts">${opts.map((o, i) => `<button class="opt${step === 1 ? " ar" : ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}"${step === 1 ? ' style="font-size:24px"' : ""}>${esc(step === 1 ? spaced(o) : gist(o))}</button>`).join("")}</div>
@@ -1104,6 +1121,13 @@ function profilePage() {
   };
   draw();
 }
+// Light or dark, whatever the phone is set to: the choice is kept on this device for every profile
+const DARK = matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => (document.documentElement.dataset.theme || (DARK.matches ? "dark" : "light")) === "dark";
+const themeIcon = () => { const b = $("#theme"); b.textContent = isDark() ? "☀️" : "🌙"; b.title = isDark() ? "Switch to light" : "Switch to dark"; };
+$("#theme").onclick = () => { const t = isDark() ? "light" : "dark"; document.documentElement.dataset.theme = t; raw.set("theme", t); themeIcon(); };
+DARK.addEventListener("change", themeIcon);
+themeIcon();
 const profileChip = () => { const p = profiles.list().find((x) => x.id === profiles.active()) || profiles.list()[0]; $("#who").textContent = p.name; };
 
 // ---------- router ----------
