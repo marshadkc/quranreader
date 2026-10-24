@@ -9,13 +9,26 @@ const DAGGER = "ٰ", SILENT = "۟", MADDA = "ٓ";
 const MARK = { a: "", i: "ि", u: "ु", A: "ा", I: "ी", U: "ू", ai: "ै", au: "ौ" };
 const FREE = { a: "अ", i: "इ", u: "उ", A: "आ", I: "ई", U: "ऊ", ai: "ऐ", au: "औ" };
 
-export function deva(word) {
+// stop: the word ends an āyah, so it is read with a pause: no last short vowel, -an → ā, ة → h (لِلْمُتَّقِينَ → लिल्मुत्तक़ीन)
+export function deva(word, stop = false) {
   const t = [...word.replace(/[ۖ-ۭـ]/g, (c) => (c === SILENT || c === "ۥ" || c === "ۦ" ? c : ""))];
   // units: one letter and its marks
   const u = [];
   for (const ch of t) {
     if (/[ً-ٰٓ۟ۥۦ]/.test(ch) && u.length && !"ۥۦ".includes(ch)) u[u.length - 1].m += ch;
     else u.push({ c: ch, m: "" });
+  }
+  if (stop) {
+    const live = u.filter((x) => !x.m.includes(SILENT));
+    let L = live[live.length - 1];
+    if (L && "اى".includes(L.c) && !/[\u064B-\u0652]/.test(L.m)) {
+      const P = live[live.length - 2];
+      if (P && P.m.includes(TA)) P.m = P.m.replace(TA, FA); // هُدًى → हुदा
+    } else if (L) {
+      if (L.c === "ة") { L.c = "ه"; L.m = "\u0652"; }
+      else if (L.m.includes(TA)) { L.m = L.m.replace(TA, FA); u.push({ c: "ا", m: "" }); } // an -an without its alif
+      else { L.m = L.m.replace(/[\u064C\u064D\u064E\u064F\u0650]/g, ""); if (!L.m.includes(SH)) L.m += "\u0652"; }
+    }
   }
   let out = "", lastShortA = false;
   const vowelOf = (m) => (m.includes(FA) || m.includes(TA) ? "a" : m.includes(KA) || m.includes(TK) ? "i" : m.includes(DA) || m.includes(TD) ? "u" : "");
@@ -41,7 +54,7 @@ export function deva(word) {
     else if (v === "a" && nx && "يى".includes(nx.c) && nm && bare) { v = "ai"; i++; }
     else if (v === "a" && nx && nx.c === "و" && nm && bare) { v = "au"; i++; }
     // letters that only lengthen: a bare alif, alif maqsura, a bare و/ي after a long vowel
-    if ("اى".includes(c) && !vowelOf(m)) { if (first) out += "अ"; continue; }
+    if ("اى".includes(c) && !vowelOf(m) && !m.includes(SH)) { if (first) out += "अ"; continue; }
     if (c === "آ") { out += first || !out ? "आ" : "ा"; lastShortA = false; continue; }
     let s;
     if (HAMZA.includes(c) || (c === "ا" && v)) {
