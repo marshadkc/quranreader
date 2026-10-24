@@ -2,6 +2,7 @@
 // practice quiz, word parts and the Ayah Honeycomb.
 import { renderHive } from "./hive.js";
 import { formsOf, formsHTML, formLabel, formHL, trickOf, switchQuestion } from "./forms.js";
+import { mushaf } from "./mushaf.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -57,9 +58,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 36; // keep in step with VERSION in sw.js
+const VERSION_NO = 37; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd)."],
   35: ["The home page now says: Learn to read the Quran without translation."],
   34: ["The Word forms section on the word card is now a clear button: tap Show to open it.", "Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
   33: ["Form Switch: a new quiz that turns each word into another form: a verb into another person or tense, a noun into one, two or many (on every sūrah page).", "Two teams in Honeycomb can now ask word forms too.", "Word forms on the word card: how each verb and noun changes, with the easy trick for each.", "This notice, so you know when the app has updated."],
@@ -486,7 +488,7 @@ async function reader(n, focus) {
       <div class="row" id="prog"></div>
       <div class="track">${barHTML({ pct: 0, way: 0 }, "progfill")}</div>
     </section>
-    <div class="row">${langHTML(ws)}
+    <div class="row"><span class="row">${langHTML(ws)}<a class="btn mushaf-btn" href="#/mushaf/s/${n}/${focus || 1}">📖 Read in Mushaf</a></span>
       ${ready ? `<span class="row"><a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a><a class="btn" href="#/s/${n}/roots">Root challenge</a><a class="btn" href="#/s/${n}/forms">Form Switch</a></span>` : ""}</div>
     ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
     ${versesHTML(d.ayahs, idx, n)}
@@ -1108,7 +1110,8 @@ async function route() {
       else if (h[2] === "roots") await rootChallenge(+h[1], h[3]);
       else if (h[2] === "forms") await formSwitch(+h[1], h[3]);
       else anchored = await reader(+h[1], +h[2] || 0);
-    } else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
+    } else if (h[0] === "mushaf") await mushaf(h[1], h[2], h[3]);
+    else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();
     else if (h[0] === "parts") await parts();
