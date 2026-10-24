@@ -41,6 +41,12 @@ export const state = {
 const wordFace = (w) => `<span class="face">${state.script !== "hi" ? `<span class="ar">${arHTML(w)}</span>` : ""}${state.script !== "ar" ? `<span class="dv" lang="hi">${esc(deva(w.t))}</span>` : ""}</span>`;
 // under the big Arabic word on the card and in quizzes, when the reader uses Hindi letters
 const dvLine = (w) => (state.script !== "ar" ? `<div class="dv big" lang="hi">${esc(deva(w.t))}</div>` : "");
+// quizzes ask the word as the reader reads it: only Hindi letters with हिंदी लिपि, both with Both
+export const quizWordHTML = (w) => (state.script === "hi" ? "" : `<div class="ar big">${arHTML(w)}</div>`) + dvLine(w);
+// a word or letter inline (Honeycomb cells, feedback): Hindi letters with हिंदी लिपि, else Arabic
+export const wordSpan = (t, cls = "") => (state.script === "hi" ? `<span class="dv ${cls}" lang="hi">${esc(deva(t))}</span>` : `<span class="ar ${cls}">${esc(t)}</span>`);
+// the āyah around a quiz word, the word itself underlined
+export const ctxHTML = (a, w) => `<div class="ctx${state.script === "hi" ? " dv" : ""}">${a.w.map((x) => { const t = esc(state.script === "hi" ? deva(x.t) : x.t); return x === w ? `<b>${t}</b>` : t; }).join(" ")}</div>`;
 const SCRIPTS = [["ar", "عربی"], ["hi", "हिंदी लिपि"], ["both", "Both"]];
 const scriptHTML = () => `<div class="seg" aria-label="Show the words in">${SCRIPTS.map(([k, n]) => `<button data-script="${k}" aria-pressed="${state.script === k}">${n}</button>`).join("")}</div>`;
 // A word's level belongs to its shape: the base word as written without vowels, case endings, prefixes or
@@ -69,7 +75,7 @@ const LABEL = ["new", "learning", "almost", "known"];
 const VERSION_NO = 39; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
-  39: ["🌙 / ☀️ at the top switches between dark and light, whatever your phone is set to.", "Words in Hindi letters: above the āyāt, pick हिंदी लिपि to see how each Arabic word sounds written in Hindi, or Both to see it under the Arabic.", "Mushaf pages now have a printed muṣḥaf's blue border, with the sūrah, para and page in frames."],
+  39: ["🌙 / ☀️ at the top switches between dark and light, whatever your phone is set to.", "Words in Hindi letters: above the āyāt, pick हिंदी लिपि to see how each Arabic word sounds written in Hindi, or Both to see it under the Arabic. With हिंदी लिपि the quizzes and the Honeycomb show the words in Hindi letters too.", "Mushaf pages now have a printed muṣḥaf's blue border, with the sūrah, para and page in frames."],
   38: ["Read in Mushaf now uses the 15-line ḥifẓ muṣḥaf (610 pages, every page ends on an āyah).", "Mushaf: tapping a word opens its word card right on the page, and Close brings you back to the same page.", "Mushaf: the page buttons sit just above and below the page.", "Tajweed colours guide: in the Mushaf, tap a colour or \"What do the colours mean?\" to see how each rule is read, with examples you can open on their page."],
   37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd). Tap a word there for its meaning and its word card.", "Every place a word occurs: each āyah now has buttons to go to it in the sūrah or in the Mushaf.", "Word card: 📖 In the Mushaf shows the word on its muṣḥaf page."],
   35: ["The home page now says: Learn to read the Quran without translation."],
@@ -767,8 +773,8 @@ async function practise(n, range) {
       <div class="track"><div class="fill" style="width:${Math.round((Math.min(r.i, r.total) / r.total) * 100)}%"></div></div>
       <section class="card quiz">
         <div class="note">${w.s}:${w.a} · this word: ${LABEL[lv(w)]}</div>
-        <div class="ar big">${arHTML(w)}</div>${dvLine(w)}
-        <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
+        ${quizWordHTML(w)}
+        ${ctxHTML(a, w)}
         <div class="opts">${opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>
         <div class="fb">${fb}</div>
         ${done ? `<button class="btn primary" id="next">${r.i + 1 < r.deck.length ? "Next word" : "See my score"}</button>` : ""}
@@ -871,8 +877,8 @@ async function rootChallenge(n, range) {
       <div class="track"><div class="fill" style="width:${Math.round(((c.i * 2 + step - 1) / (c.deck.length * 2)) * 100)}%"></div></div>
       <section class="card quiz">
         <div class="note">${w.s}:${w.a} · ${esc(meaningOf(w, lang()))}</div>
-        <div class="ar big">${arHTML(w)}</div>${dvLine(w)}
-        <div class="ctx">${a.w.map((x) => (x === w ? `<b>${esc(x.t)}</b>` : esc(x.t))).join(" ")}</div>
+        ${quizWordHTML(w)}
+        ${ctxHTML(a, w)}
         ${step === 2 ? `<div>The root <span class="ar" style="font-size:26px">${esc(spaced(w.r))}</span> means…</div>` : ""}
         <div class="opts">${opts.map((o, i) => `<button class="opt${step === 1 ? " ar" : ur ? " ur" : ""}${marks[i] ? " " + marks[i] : ""}" data-o="${i}"${step === 1 ? ' style="font-size:24px"' : ""}>${esc(step === 1 ? spaced(o) : gist(o))}</button>`).join("")}</div>
         <div class="fb">${fb}</div>

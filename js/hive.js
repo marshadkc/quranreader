@@ -1,7 +1,7 @@
 // Ayah Honeycomb: the Juz Amma review game.
 // An āyah's words lie on a zig-zag path of cells from the right edge of a hexagon-shaped
 // honeycomb to the left edge. Cells are answered in reading order; right = honey, wrong = red.
-import { store, withMeanings, index, CREDIT, esc, hasMeaning, meaningOf, addHoney, quizLang, quizLangHTML, setQuizLang, distractors, bothHTML, ayahHTML, norm } from "./app.js";
+import { store, withMeanings, index, CREDIT, esc, hasMeaning, meaningOf, addHoney, quizLang, quizLangHTML, setQuizLang, distractors, bothHTML, ayahHTML, norm, wordSpan, quizWordHTML } from "./app.js";
 import { formsOf, switchQuestion, formLabel, formHL, trickOf } from "./forms.js";
 
 // First pick a sūrah or a juz, then play the āyāt you have practised in it ("Practise up to here"
@@ -91,7 +91,7 @@ function layout(n) {
 const letters = (t) => t.replace(/[ً-ٰٟۖ-ۭ]/g, "").length;
 // the first letter of a word's stem, after و، ف، ٱل and other prefixes, as the clue on a team-race cell
 const initial = (w) => { const s = (w.p.find((x) => x[1] === "s") || [w.t])[0].replace(/[^\u0621-\u064a\u0671]/g, ""); return ({ "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا" })[s[0]] || s[0] || ""; };
-const cellName = (x) => `the <span class="ar">${esc(initial(x.w))}</span> cell`;
+const cellName = (x) => `the ${wordSpan(initial(x.w))} cell`;
 let g = null, t = null; // the solo game and the team race
 
 export async function renderHive(app) {
@@ -155,12 +155,12 @@ export async function renderHive(app) {
       if (cur && idx.has(c.k)) {
         const i = idx.get(c.k), res = g.res[i], t = ws[i].t;
         fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(t)));
-        if (res === "right") { cls = "done"; inner = `<span class="ar">${esc(t)}</span>`; }
-        else if (res === "wrong") { cls = "bad"; inner = `<span class="ar">${esc(t)}</span>`; }
-        else if (g.active === i) { cls = "active"; inner = `<span class="ar">${esc(t)}</span>`; }
+        if (res === "right") { cls = "done"; inner = wordSpan(t); }
+        else if (res === "wrong") { cls = "bad"; inner = wordSpan(t); }
+        else if (g.active === i) { cls = "active"; inner = wordSpan(t); }
         else if (i === next && g.active === null) { cls = "hid next"; tag = "button"; attrs = `data-cell="${i}" aria-label="Reveal word ${i + 1} of ${ws.length}"`; }
         else cls = "hid";
-        if (cls.startsWith("hid")) { inner = `<span class="no ar">${esc(initial(ws[i]))}</span>`; fs = cw * 0.3; } // the word's first letter, as on the team board
+        if (cls.startsWith("hid")) { inner = wordSpan(initial(ws[i]), "no"); fs = cw * 0.3; } // the word's first letter, as on the team board
         if (g.fresh) { cls += " appear"; delay = `animation-delay:${i * 60}ms;`; }
       }
       return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
@@ -169,14 +169,14 @@ export async function renderHive(app) {
     const busy = g.mode === "play";
     let panel;
     const gain = g.gain ? `<div class="pts">${g.gain}</div>` : "";
-    const last = g.last ? `<div class="note"><span style="color:var(--bad)">Not quite.</span> <span class="ar">${esc(g.last.t)}</span> means ${bothHTML(g.last)}.</div>` : "";
+    const last = g.last ? `<div class="note"><span style="color:var(--bad)">Not quite.</span> ${wordSpan(g.last.t)} means ${bothHTML(g.last)}.</div>` : "";
     if (g.mode === "pick") panel = `<div>Choose an āyah above. Its cells light up from the right edge of the honeycomb.</div>
       <div class="note">10 honey for each right answer, doubled after five in a row. Finish an āyah for 20 more, or 50 if every word was right.</div>`;
     else if (busy && g.active === null) panel = `${gain}${last}<div>${esc(cur.name)} ${cur.label} · ${g.res.filter((x) => !x).length} of ${ws.length} cells left</div>
       <div class="note">Tap the glowing cell to reveal the next word.</div><button class="btn" id="back">Choose another āyah</button>`;
     else if (busy) {
       const w = ws[g.active];
-      panel = `<div class="note">Word ${g.active + 1} of ${ws.length} · ${cur.label}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
+      panel = `<div class="note">Word ${g.active + 1} of ${ws.length} · ${cur.label}</div>${quizWordHTML(w)}<div>What does it mean?</div>
         <div class="opts">${g.opts.map((o, i) => `<button class="opt${lang() === "ur" ? " ur" : ""}" data-o="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
     } else {
       const right = g.res.filter((x) => x === "right").length;
@@ -279,13 +279,13 @@ export async function renderHive(app) {
       const cells = [...t.board.values()].map((x) => {
         const c = x.c, left = (c.x + TR) * sx, top = (c.row + TR) * sy;
         let cls, inner, tag = "div", attrs = "", fs = cw * 0.3, delay = t.fresh ? `animation-delay:${x.no * 20}ms;` : "";
-        const word = `<span class="ar">${esc(x.w.t)}</span>`;
-        if (t.pick === c.k) { cls = "active"; inner = `<span class="ar">${esc(t.pickW.t)}</span>`; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(t.pickW.t))); }
+        const word = wordSpan(x.w.t);
+        if (t.pick === c.k) { cls = "active"; inner = wordSpan(t.pickW.t); fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(t.pickW.t))); }
         else if (x.own !== null) {
           cls = "won" + t.teams[x.own].cls; inner = word; fs = Math.min(cw * 0.3, (cw * 1.25) / Math.max(3, letters(x.w.t)));
           if (can.has(c.k)) { cls += " steal"; tag = "button"; attrs = `data-tc="${c.k}" aria-label="Steal this cell"`; }
         }
-        else { cls = "num" + (x.white ? " white" : "") + (can.has(c.k) ? " can can" + cur.cls : ""); inner = `<span class="no ar">${esc(initial(x.w))}</span>`; if (can.has(c.k)) { tag = "button"; attrs = `data-tc="${c.k}" aria-label="Cell starting with ${esc(initial(x.w))}"`; } }
+        else { cls = "num" + (x.white ? " white" : "") + (can.has(c.k) ? " can can" + cur.cls : ""); inner = wordSpan(initial(x.w), "no"); if (can.has(c.k)) { tag = "button"; attrs = `data-tc="${c.k}" aria-label="Cell starting with ${esc(initial(x.w))}"`; } }
         if (t.fresh) cls += " appear";
         return `<${tag} class="hex ${cls}" ${attrs} style="left:${left}px;top:${top}px;--fs:${fs.toFixed(1)}px;${delay}"><span>${inner}</span></${tag}>`;
       }).join("");
@@ -296,7 +296,7 @@ export async function renderHive(app) {
       const held = (ti) => [...t.board.values()].filter((x) => x.own === ti).length;
       const score = t.teams.map((tm, ti) => `<div class="team t${tm.cls}${playing && ti === t.turn ? " now" : ""}"><strong>${esc(tm.name)} <span class="note">${ROUTE[ti]}</span></strong>
           <span class="note">${held(ti)} cell${held(ti) === 1 ? "" : "s"} · ${tm.missed.length} wrong</span></div>`).join("");
-      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span> ${esc(t.last.who)} ${t.last.steal ? "steals" : "takes"} ${t.last.no}.` : `<span style="color:var(--bad)">Not quite.</span> ${t.last.fq ? `<span class="ar">${esc(t.last.fq.from.t)}</span> → <span class="ar">${esc(t.last.fq.to.t)}</span> (${esc(formLabel(t.last.fq.to))}).` : `<span class="ar">${esc(t.last.w.t)}</span> means ${bothHTML(t.last.w)}.`} ${t.last.steal ? `The cell stays with ${esc(t.last.owner)}.` : `The cell turns white and gets a new word, with a new letter.`}`}</div>` : "";
+      const last = t.last ? `<div class="note">${t.last.ok ? `<span style="color:var(--good)">Right.</span> ${esc(t.last.who)} ${t.last.steal ? "steals" : "takes"} ${t.last.no}.` : `<span style="color:var(--bad)">Not quite.</span> ${t.last.fq ? `<span class="ar">${esc(t.last.fq.from.t)}</span> → <span class="ar">${esc(t.last.fq.to.t)}</span> (${esc(formLabel(t.last.fq.to))}).` : `${wordSpan(t.last.w.t)} means ${bothHTML(t.last.w)}.`} ${t.last.steal ? `The cell stays with ${esc(t.last.owner)}.` : `The cell turns white and gets a new word, with a new letter.`}`}</div>` : "";
       let panel;
       if (!t.ready) {
         panel = `<div><strong>Name the teams</strong></div><div class="names">${t.teams.map((tm, i) => `<label class="team t${tm.cls}">Team ${i + 1}<input id="tn${i}" maxlength="20" value="${esc(tm.name)}" autocomplete="off"></label>`).join("")}</div>
@@ -305,7 +305,7 @@ export async function renderHive(app) {
           ${ask() === "mf" ? `<div class="note">Each team gets a meaning question and a Form Switch question in turn: change a verb to another person or tense, or a noun to one, two or many. When a cell's word has no forms to switch (a small word like فِي), it asks the meaning, and that team's next question is Form Switch.</div>` : ""}
           <button class="btn primary" id="tgo">Start the match</button>`;
       } else if (t.over) {
-        const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => w.fq ? `<div class="mrow"><span class="ar">${esc(w.fq.from.t)} → ${esc(w.fq.to.t)}</span><span>${esc(formLabel(w.fq.to))}</span></div>` : `<div class="mrow"><span class="ar">${esc(w.t)}</span><span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
+        const missed = t.teams.map((tm) => `<div class="missed"><div class="note">${esc(tm.name)}: ${tm.missed.length ? "words to look at again" : "no mistakes"}</div>${tm.missed.map((w) => w.fq ? `<div class="mrow"><span class="ar">${esc(w.fq.from.t)} → ${esc(w.fq.to.t)}</span><span>${esc(formLabel(w.fq.to))}</span></div>` : `<div class="mrow">${wordSpan(w.t)}<span>${bothHTML(w)}</span></div>`).join("")}</div>`).join("");
         panel = `${last}<h2 style="margin:4px 0">${t.over}</h2>${missed}<button class="btn honey" id="tnew">New match</button>`;
       } else if (t.pick === null) {
         panel = `${last}<div>Turn: <strong>${esc(cur.name)}</strong></div><div class="note">Choose a glowing cell${[...t.board.values()].some((x) => x.own === t.turn) ? ", next to your last cell, or steal a marked cell of the other team" : ` on ${EDGE[t.turn]}`}.</div>`;
@@ -318,7 +318,7 @@ export async function renderHive(app) {
           <div class="opts">${opts.map((o, i) => `<button class="opt ar" style="font-size:26px" data-to="${i}">${esc(o.t)}</button>`).join("")}</div>`;
       } else {
         const w = t.pickW, ur = lang() === "ur";
-        panel = `<div class="note">${esc(cur.name)} · ${cellName(t.board.get(t.pick))}</div><div class="ar big" style="font-size:40px;line-height:1.6">${esc(w.t)}</div><div>What does it mean?</div>
+        panel = `<div class="note">${esc(cur.name)} · ${cellName(t.board.get(t.pick))}</div>${quizWordHTML(w)}<div>What does it mean?</div>
           <div class="opts">${t.opts.map((o, i) => `<button class="opt${ur ? " ur" : ""}" data-to="${i}">${esc(meaningOf(o, lang()))}</button>`).join("")}</div>`;
       }
       app.innerHTML = `${head(playing, "Team A builds right to left, Team B top to bottom, so the routes cross. Choose a cell by its first letter, answer its word, and take it, or steal one.")}

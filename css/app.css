@@ -384,3 +384,5 @@ h1 small.note{font-size:14px;font-weight:400}
 .dv{font-family:"Noto Sans Devanagari","Nirmala UI","Mangal",var(--f-ui);font-size:19px;overflow-wrap:anywhere;line-height:1.5;color:var(--ink);font-weight:500}
 .dv.big{font-size:24px;text-align:center}
 .face .ar+.dv{font-size:15px;color:var(--muted)}
+.ctx.dv{font-family:"Noto Sans Devanagari","Nirmala UI","Mangal",var(--f-ui);direction:ltr;font-size:17px;font-weight:400;color:var(--muted)}
+.hex .no.dv{font-size:calc(var(--cw)*0.36);font-weight:600;line-height:1}
