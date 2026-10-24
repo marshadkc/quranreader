@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached on install; data and fonts are cached as they are used.
-const VERSION = "qwr-v36";
-const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/hive.js", "js/forms.js", "manifest.webmanifest", "data/surahs.json", "icons/icon.svg", "icons/icon-192.png"];
+const VERSION = "qwr-v37";
+const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/hive.js", "js/forms.js", "js/mushaf.js", "manifest.webmanifest", "data/surahs.json", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   // "reload" skips the browser's own HTTP cache, which can still hold the previous version for a few minutes
@@ -15,7 +15,7 @@ self.addEventListener("fetch", (e) => {
   // Word meanings from api.quran.com are kept by the app itself for at most 7 days (Quran Foundation's terms), never here
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.hostname === "api.quran.com") return;
-  const shell = url.origin === location.origin && !url.pathname.includes("/data/") && !url.pathname.includes("/icons/");
+  const shell = url.origin === location.origin && !url.pathname.includes("/data/") && !url.pathname.includes("/icons/") && !url.pathname.includes("/fonts/");
   e.respondWith(caches.open(VERSION).then(async (cache) => {
     const hit = await cache.match(e.request, { ignoreSearch: shell });
     const net = fetch(shell ? new Request(url.href, { cache: "no-cache" }) : e.request)

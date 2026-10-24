@@ -7,8 +7,8 @@ import { formsOf, switchQuestion, formLabel, formHL, trickOf } from "./forms.js"
 // First pick a sūrah or a juz, then play the āyāt you have practised in it ("Practise up to here"
 // remembers how far, per sūrah) or all of it.
 // Where each juz starts: [sūrah, āyah]
-const JUZ = [[1, 1], [2, 142], [2, 253], [3, 93], [4, 24], [4, 148], [5, 82], [6, 111], [7, 88], [8, 41], [9, 93], [11, 6], [12, 53], [15, 1], [17, 1], [18, 75], [21, 1], [23, 1], [25, 21], [27, 56], [29, 46], [33, 31], [36, 28], [39, 32], [41, 47], [46, 1], [51, 31], [58, 1], [67, 1], [78, 1]];
-const inJuz = (j, s, a) => { const [s0, a0] = JUZ[j - 1], [s1, a1] = JUZ[j] || [115, 1]; return (s > s0 || (s === s0 && a >= a0)) && (s < s1 || (s === s1 && a < a1)); };
+export const JUZ = [[1, 1], [2, 142], [2, 253], [3, 93], [4, 24], [4, 148], [5, 82], [6, 111], [7, 88], [8, 41], [9, 93], [11, 6], [12, 53], [15, 1], [17, 1], [18, 75], [21, 1], [23, 1], [25, 21], [27, 56], [29, 46], [33, 31], [36, 28], [39, 32], [41, 47], [46, 1], [51, 31], [58, 1], [67, 1], [78, 1]];
+export const inJuz = (j, s, a) => { const [s0, a0] = JUZ[j - 1], [s1, a1] = JUZ[j] || [115, 1]; return (s > s0 || (s === s0 && a >= a0)) && (s < s1 || (s === s1 && a < a1)); };
 const MAX = 13; // longer āyāt are played in parts of at most this many words, so each flows across a 37-cell honeycomb
 function units(d) {
   return d.ayahs.filter((a) => a.w.every(hasMeaning)).flatMap((a) => {
