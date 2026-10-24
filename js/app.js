@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 40; // keep in step with VERSION in sw.js
+const VERSION_NO = 41; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  41: ["Hindi meanings for small words like في (में), من (से) and على (पर): about 6,700 words Quran.com has no Hindi for now show Al-Huda's Urdu meaning in Hindi letters, so Hindi quizzes no longer mix in English."],
   40: ["Hindi letters: the last word of each āyah is now written as it is read when you stop there, without the \"-\" (लिल्मुत्तक़ीन, हुदा)."],
   39: ["🌙 / ☀️ at the top switches between dark and light, whatever your phone is set to.", "Words in Hindi letters: above the āyāt, pick हिंदी लिपि to see how each Arabic word sounds written in Hindi, or Both to see it under the Arabic. With हिंदी लिपि the quizzes and the Honeycomb show the words in Hindi letters too.", "Mushaf pages now have a printed muṣḥaf's blue border, with the sūrah, para and page in frames."],
   38: ["Read in Mushaf now uses the 15-line ḥifẓ muṣḥaf (610 pages, every page ends on an āyah).", "Mushaf: tapping a word opens its word card right on the page, and Close brings you back to the same page.", "Mushaf: the page buttons sit just above and below the page.", "Tajweed colours guide: in the Mushaf, tap a colour or \"What do the colours mean?\" to see how each rule is read, with examples you can open on their page."],
@@ -113,7 +114,7 @@ const forms = async () => (FORMS ||= await json("data/index/forms.json"));
 const WBW_API = "https://api.quran.com/api/v4/verses/by_chapter/";
 const WEEK = 7 * 24 * 60 * 60 * 1000;
 const LANGS = ["en", "ur", "hi"];
-export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International); Hindi by Al-Huda International, with English where Quran.com has no Hindi for a word. Āyah translations: Saheeh International (English), Fateh Muhammad Jalandhari (Urdu) and Maulana Azizul Haque al-Umari (Hindi). Quran data provided by Quran Foundation.</p>`;
+export const CREDIT = `<p class="note credit">Word meanings from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; Urdu by Dr. Farhat Hashmi (Al-Huda International); Hindi by Al-Huda International; where Quran.com has no Hindi for a word (mostly small words like في and من), Al-Huda's Urdu meaning is written in Hindi letters, and English is shown for the few left. Āyah translations: Saheeh International (English), Fateh Muhammad Jalandhari (Urdu) and Maulana Azizul Haque al-Umari (Hindi). Quran data provided by Quran Foundation.</p>`;
 const LIVE = new Map(); // "lang.sūrah" -> { at, p: promise of { ayah: [meanings] } or null }
 const cleanText = (s) => String(s || "").replace(/<sup[^>]*>.*?<\/sup>|<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 function liveMeanings(n, lang) {
@@ -295,8 +296,11 @@ export const setQuizLang = (b) => { store.set("quizLang", b.dataset.qlang); docu
 const sameWord = (x, w) => x.k === w.k || (!!x.l && x.l === w.l);
 export function distractors(w, pool, k = 3) {
   const used = Object.fromEntries(LANGS.map((l) => [l, new Set([w[l]].filter(Boolean))])), out = [];
-  for (const x of [...pool].sort(() => Math.random() - 0.5)) {
+  const mixed = [...pool].sort(() => Math.random() - 0.5);
+  // first only words with a meaning in every language this word has, so no option falls back to English
+  for (const full of [true, false]) for (const x of mixed) {
     if (out.length === k) break;
+    if (out.includes(x) || (full && LANGS.some((l) => w[l] && !x[l]))) continue;
     if (!hasMeaning(x) || sameWord(x, w) || LANGS.some((l) => x[l] && used[l].has(x[l])) || meaningOf(x, "en") === meaningOf(w, "en")) continue;
     out.push(x); LANGS.forEach((l) => x[l] && used[l].add(x[l]));
   }
