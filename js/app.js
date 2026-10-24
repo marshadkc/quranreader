@@ -38,15 +38,15 @@ export const state = {
   script: store.get("script", "ar"),  // the word itself in Arabic letters, Hindi letters (transliteration), or both
 };
 // A word as the reader asked to see it: Arabic, its sound in Hindi letters, or both
-const wordFace = (w) => `<span class="face">${state.script !== "hi" ? `<span class="ar">${arHTML(w)}</span>` : ""}${state.script !== "ar" ? `<span class="dv" lang="hi">${esc(deva(w.t))}</span>` : ""}</span>`;
+const wordFace = (w) => `<span class="face">${state.script !== "hi" ? `<span class="ar">${arHTML(w)}</span>` : ""}${state.script !== "ar" ? `<span class="dv" lang="hi">${esc(deva(w.t, w.end))}</span>` : ""}</span>`;
 // under the big Arabic word on the card and in quizzes, when the reader uses Hindi letters
-const dvLine = (w) => (state.script !== "ar" ? `<div class="dv big" lang="hi">${esc(deva(w.t))}</div>` : "");
+const dvLine = (w) => (state.script !== "ar" ? `<div class="dv big" lang="hi">${esc(deva(w.t, w.end))}</div>` : "");
 // quizzes ask the word as the reader reads it: only Hindi letters with हिंदी लिपि, both with Both
 export const quizWordHTML = (w) => (state.script === "hi" ? "" : `<div class="ar big">${arHTML(w)}</div>`) + dvLine(w);
 // a word or letter inline (Honeycomb cells, feedback): Hindi letters with हिंदी लिपि, else Arabic
 export const wordSpan = (t, cls = "") => (state.script === "hi" ? `<span class="dv ${cls}" lang="hi">${esc(deva(t))}</span>` : `<span class="ar ${cls}">${esc(t)}</span>`);
 // the āyah around a quiz word, the word itself underlined
-export const ctxHTML = (a, w) => `<div class="ctx${state.script === "hi" ? " dv" : ""}">${a.w.map((x) => { const t = esc(state.script === "hi" ? deva(x.t) : x.t); return x === w ? `<b>${t}</b>` : t; }).join(" ")}</div>`;
+export const ctxHTML = (a, w) => `<div class="ctx${state.script === "hi" ? " dv" : ""}">${a.w.map((x) => { const t = esc(state.script === "hi" ? deva(x.t, x.end) : x.t); return x === w ? `<b>${t}</b>` : t; }).join(" ")}</div>`;
 const SCRIPTS = [["ar", "عربی"], ["hi", "हिंदी लिपि"], ["both", "Both"]];
 const scriptHTML = () => `<div class="seg" aria-label="Show the words in">${SCRIPTS.map(([k, n]) => `<button data-script="${k}" aria-pressed="${state.script === k}">${n}</button>`).join("")}</div>`;
 // A word's level belongs to its shape: the base word as written without vowels, case endings, prefixes or
@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 39; // keep in step with VERSION in sw.js
+const VERSION_NO = 40; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  40: ["Hindi letters: the last word of each āyah is now written as it is read when you stop there, without the \"-\" (लिल्मुत्तक़ीन, हुदा)."],
   39: ["🌙 / ☀️ at the top switches between dark and light, whatever your phone is set to.", "Words in Hindi letters: above the āyāt, pick हिंदी लिपि to see how each Arabic word sounds written in Hindi, or Both to see it under the Arabic. With हिंदी लिपि the quizzes and the Honeycomb show the words in Hindi letters too.", "Mushaf pages now have a printed muṣḥaf's blue border, with the sūrah, para and page in frames."],
   38: ["Read in Mushaf now uses the 15-line ḥifẓ muṣḥaf (610 pages, every page ends on an āyah).", "Mushaf: tapping a word opens its word card right on the page, and Close brings you back to the same page.", "Mushaf: the page buttons sit just above and below the page.", "Tajweed colours guide: in the Mushaf, tap a colour or \"What do the colours mean?\" to see how each rule is read, with examples you can open on their page."],
   37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd). Tap a word there for its meaning and its word card.", "Every place a word occurs: each āyah now has buttons to go to it in the sūrah or in the Mushaf.", "Word card: 📖 In the Mushaf shows the word on its muṣḥaf page."],
@@ -97,7 +98,7 @@ const core = () => (CORE ||= json("data/core.json").catch(() => { CORE = null; r
 export async function surah(n) {
   if (!SURAH.has(n)) {
     const d = await json(`data/s/${String(n).padStart(3, "0")}.json`);
-    d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; w.k = shapeKey(w); }));
+    d.ayahs.forEach((a) => a.w.forEach((w, i) => { w.s = n; w.a = a.n; w.i = i; w.k = shapeKey(w); w.end = i === a.w.length - 1; }));
     SURAH.set(n, d);
   }
   return SURAH.get(n);
