@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Noto+Nastaliq+Urdu:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="css/app.css">
+<script>try{const t=JSON.parse(localStorage.getItem("qwr.theme"));if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
 <header class="top">
@@ -26,6 +27,7 @@
     <a href="#/about" data-tab="about">About</a>
   </nav>
   <a class="who" href="#/profile" title="Profile"><span id="who">Me</span></a>
+  <button class="theme" id="theme" aria-label="Switch light or dark">🌙</button>
   <div class="jar" title="Honey jar"><i class="drop"></i><strong id="jar">0</strong></div>
 </header>
 <div class="layout">

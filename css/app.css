@@ -10,12 +10,19 @@
   --cw:60px;
   color-scheme:light;
 }
-@media (prefers-color-scheme: dark){:root{
+/* dark: follows the device unless the reader picks Light or Dark (data-theme on <html>) */
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f1716; --surface:#172221; --ink:#e3ece9; --muted:#97aaa6; --line:#2a3a38;
   --accent:#5fc2ae; --part:#8aa6ff; --part-soft:#1f2a4a; --good:#6cc38f; --bad:#ef8a8a;
   --wax:#4d3f27; --wax-edge:#8a7040; --honey:#e2a23a; --honey-deep:#f0bd62;
   --hid:#2a665a; --hid-edge:#6cc0ab; --miss:#7a3b33; --miss-edge:#b0614f;
   color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1716; --surface:#172221; --ink:#e3ece9; --muted:#97aaa6; --line:#2a3a38;
+  --accent:#5fc2ae; --part:#8aa6ff; --part-soft:#1f2a4a; --good:#6cc38f; --bad:#ef8a8a;
+  --wax:#4d3f27; --wax-edge:#8a7040; --honey:#e2a23a; --honey-deep:#f0bd62;
+  --hid:#2a665a; --hid-edge:#6cc0ab; --miss:#7a3b33; --miss-edge:#b0614f;
+  color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
@@ -275,7 +282,7 @@ h1 small.note{font-size:14px;font-weight:400}
 .profiles li{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .profiles li.on{border-color:var(--accent)}
 #addp input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit}
-@media (max-width:440px){.brand{font-size:14px}.who{margin-right:8px;padding:3px 8px}}
+@media (max-width:440px){.brand{font-size:14px}.who{margin-right:8px;padding:3px 8px}.theme{margin-right:8px;padding:3px 7px}}
 /* wide screens: the word card and its root meanings fill a right-hand column, like the sūrah list on the left */
 @media (min-width:1280px){
   .wrap:has(#sheetbox){width:calc(100% - 380px);margin:0 380px 0 auto}
@@ -323,8 +330,9 @@ h1 small.note{font-size:14px;font-weight:400}
 @media (max-width:899px){.toast{bottom:calc(72px + env(safe-area-inset-bottom,0))}}
 /* Read in Mushaf */
 @font-face{font-family:"IndoPak";src:url("../fonts/indopak-nastaleeq.woff2") format("woff2");font-display:swap}
-:root{--t-gh:#16924a;--t-ik:#d9730d;--t-iq:#8e44ad;--t-id:#1f6fd1;--t-qa:#c62828;--t-md:#a0522d;--t-sl:#9aa5a3;--paper:#fffdf6;--frame:#2f6f8f}
-@media (prefers-color-scheme: dark){:root{--t-gh:#4fd685;--t-ik:#ffab52;--t-iq:#c99af0;--t-id:#78aeff;--t-qa:#ff7d7d;--t-md:#e3a374;--t-sl:#7f8c8a;--paper:#151d1c;--frame:#5aa4c8}}
+:root{--t-gh:#16924a;--t-ik:#d9730d;--t-iq:#8e44ad;--t-id:#1f6fd1;--t-qa:#c62828;--t-md:#a0522d;--t-sl:#9aa5a3;--paper:#fffdf6;--frame:#2f6f8f;--band:#3466a0;--band-hi:#d6e6f7;--band-mid:#86acd6;--band-ink:#1b3c68}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--t-gh:#4fd685;--t-ik:#ffab52;--t-iq:#c99af0;--t-id:#78aeff;--t-qa:#ff7d7d;--t-md:#e3a374;--t-sl:#7f8c8a;--paper:#151d1c;--frame:#5aa4c8;--band:#1d3a5e;--band-hi:#7fa6d1;--band-mid:#3f6a9a;--band-ink:#5c86b8}}
+:root[data-theme="dark"]{--t-gh:#4fd685;--t-ik:#ffab52;--t-iq:#c99af0;--t-id:#78aeff;--t-qa:#ff7d7d;--t-md:#e3a374;--t-sl:#7f8c8a;--paper:#151d1c;--frame:#5aa4c8;--band:#1d3a5e;--band-hi:#7fa6d1;--band-mid:#3f6a9a;--band-ink:#5c86b8}
 .mushaf-btn{border-color:var(--frame);color:var(--frame);font-weight:600}
 .mbar{justify-content:space-between}
 .pager.above,.pager.below{gap:6px;margin:0 auto}
@@ -335,10 +343,16 @@ h1 small.note{font-size:14px;font-weight:400}
 .legend .chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px;background:var(--surface);color:var(--ink);cursor:help}
 .legend .chip i{font-style:normal}
 .legend .chip .ur{font-size:13px}
-.mpage{background:var(--paper);border:3px double var(--frame);outline:1px solid var(--frame);outline-offset:4px;border-radius:6px;padding:10px 12px 6px;margin:12px 4px;color:var(--ink);touch-action:pan-y}
-.mpage header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--frame);padding-bottom:4px;margin-bottom:6px;gap:8px}
-.mpage header .ar{font-family:"IndoPak",var(--f-ar);font-size:18px}
-.mpage footer{text-align:center;border-top:1px solid var(--frame);margin-top:6px;padding-top:2px;font-size:16px}
+/* a printed Indo-Pak muṣḥaf page: white margin, a patterned blue border band, cartouches for the sūrah, para and page */
+.mpage{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:7px;margin:12px 0;color:var(--ink);touch-action:pan-y;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.mframe{padding:8px;border:1.5px solid var(--band-ink);border-radius:3px;
+  background:radial-gradient(circle,var(--band-hi) 1.3px,transparent 1.9px) 0 0/8px 8px,radial-gradient(circle,var(--band-mid) 1px,transparent 1.5px) 4px 4px/8px 8px,var(--band)}
+.mbody{background:var(--paper);border:1.5px solid var(--band-ink);padding:0 10px 4px;box-shadow:inset 0 0 0 3px var(--paper),inset 0 0 0 4px var(--band-mid)}
+.mpage .cart{font-family:var(--f-ar);font-size:15px;line-height:1.6;background:var(--paper);border:1.5px solid var(--band-ink);border-radius:999px;padding:1px 14px;box-shadow:0 0 0 2px var(--paper),0 0 0 3px var(--band-mid);white-space:nowrap}
+@media (max-width:440px){.mpage .cart{font-size:13px;padding:1px 9px}}
+.mpage header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-19px -4px 6px;position:relative}
+.mpage footer{display:flex;justify-content:center;margin:4px 0 -17px;position:relative}
+.mpage footer .cart{font-family:var(--f-ui);font-size:13px;padding:0 12px}
 .mlines{font-family:"IndoPak",var(--f-ar);line-height:2.05;direction:rtl}
 .mlines .ml{display:flex;justify-content:space-between;align-items:baseline;white-space:nowrap;column-gap:.28em}
 .mlines .ml.mid{justify-content:center;gap:.3em}
@@ -361,6 +375,14 @@ h1 small.note{font-size:14px;font-weight:400}
 .tjrule h2 i{font-style:normal}
 .tjrule .t-gh{color:var(--t-gh)}.tjrule .t-ik{color:var(--t-ik)}.tjrule .t-iq{color:var(--t-iq)}.tjrule .t-id{color:var(--t-id)}.tjrule .t-qa{color:var(--t-qa)}.tjrule .t-md{color:var(--t-md)}.tjrule .t-sl{color:var(--t-sl)}
 .tjex{gap:10px;flex-wrap:wrap}
-.tjex a.mpage{width:auto;display:flex;align-items:center;gap:.3em;font-family:IndoPak,serif;font-size:34px;padding:6px 14px;margin:0;text-decoration:none;color:var(--ink);line-height:1.9}
+.tjex a.mpage{width:auto;border:2px solid var(--band);box-shadow:none;display:flex;align-items:center;gap:.3em;font-family:IndoPak,serif;font-size:34px;padding:6px 14px;margin:0;text-decoration:none;color:var(--ink);line-height:1.9}
 .tjex a.mpage .note{font-family:system-ui,sans-serif;font-size:12px}
 .tjrule .tjar{font-family:"IndoPak",var(--f-ar);font-size:1.35em;line-height:1.4;unicode-bidi:isolate}
+.theme{margin-right:10px;flex-shrink:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 9px;font-size:15px;cursor:pointer;line-height:1.3}
+/* the word in Hindi letters (transliteration), instead of or under the Arabic */
+.face{display:flex;flex-direction:column;align-items:center}
+.dv{font-family:"Noto Sans Devanagari","Nirmala UI","Mangal",var(--f-ui);font-size:19px;overflow-wrap:anywhere;line-height:1.5;color:var(--ink);font-weight:500}
+.dv.big{font-size:24px;text-align:center}
+.face .ar+.dv{font-size:15px;color:var(--muted)}
+.ctx.dv{font-family:"Noto Sans Devanagari","Nirmala UI","Mangal",var(--f-ui);direction:ltr;font-size:17px;font-weight:400;color:var(--muted)}
+.hex .no.dv{font-size:calc(var(--cw)*0.36);font-weight:600;line-height:1}
