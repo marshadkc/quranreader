@@ -2,7 +2,7 @@
 // practice quiz, word parts and the Ayah Honeycomb.
 import { renderHive } from "./hive.js";
 import { formsOf, formsHTML, formLabel, formHL, trickOf, switchQuestion } from "./forms.js";
-import { mushaf } from "./mushaf.js";
+import { mushaf, tajweedGuide } from "./mushaf.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -58,9 +58,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 37; // keep in step with VERSION in sw.js
+const VERSION_NO = 38; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  38: ["Tajweed colours guide: in the Mushaf, tap a colour or \"What do the colours mean?\" to see how each rule is read, with examples you can open on their page."],
   37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd). Tap a word there for its meaning and its word card.", "Every place a word occurs: each āyah now has buttons to go to it in the sūrah or in the Mushaf.", "Word card: 📖 In the Mushaf shows the word on its muṣḥaf page."],
   35: ["The home page now says: Learn to read the Quran without translation."],
   34: ["The Word forms section on the word card is now a clear button: tap Show to open it.", "Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
@@ -1113,6 +1114,7 @@ async function route() {
       else if (h[2] === "forms") await formSwitch(+h[1], h[3]);
       else anchored = await reader(+h[1], +h[2] || 0);
     } else if (h[0] === "mushaf") anchored = await mushaf(h[1], h[2], h[3], h[4]);
+    else if (h[0] === "tajweed") anchored = await tajweedGuide(h[1]);
     else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();
