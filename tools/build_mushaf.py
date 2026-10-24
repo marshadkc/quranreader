@@ -1,4 +1,4 @@
-"""Build data/mushaf/PPP.json for the "Read in Mushaf" view: the Indo-Pak 16-line pages (Taj Company layout,
+"""Build data/mushaf/PPP.json for the "Read in Mushaf" view: the Indo-Pak 15-line hifz pages (Qudratullah layout,
 from tools/mushaf_layout.json, see fetch_mushaf_layout.py) with each word's Indo-Pak text and its tajweed marks.
 
 Word text (text_indopak) and the tajweed rules (text_uthmani_tajweed) come from the Quran.com API. The tajweed

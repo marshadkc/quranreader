@@ -1,6 +1,6 @@
-// Read in Mushaf: the Quran as the Indo-Pak 16-line muṣḥaf prints it (Taj Company layout, 548 pages), one page
+// Read in Mushaf: the Quran as the Indo-Pak 15-line ḥifẓ muṣḥaf prints it (Qudratullah layout, 610 pages), one page
 // at a time, with the tajweed rules in colour. Pages: data/mushaf/PPP.json, built by tools/build_mushaf.py.
-import { esc, arN, index, withMeanings, meaningOf, state, store } from "./app.js";
+import { esc, arN, index, withMeanings, store, mushafCard, cardAct } from "./app.js";
 import { JUZ, inJuz } from "./hive.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -47,48 +47,46 @@ function fit() {
 // arg: a page number, or "s" with a sūrah, āyah and word (that word is marked on its page)
 export async function mushaf(arg, s, a, w) {
   const app = $("#app"), [m, idx] = await Promise.all([mindex(), index()]);
-  let p = arg === "s" ? await pageOf(+s, +a || 1) : Math.min(Math.max(1, +arg || store.get("mushafPage", 1)), m.pages);
+  let p = arg === "s" ? await pageOf(+s, +a || 1) : Math.min(Math.max(1, +arg || store.get("mushafPage15", 1)), m.pages);
   if (arg === "s") history.replaceState(null, "", `#/mushaf/${p}`);
   const d = await page(p);
-  store.set("mushafPage", p);
+  store.set("mushafPage15", p);
   const tj = store.get("tajweed", true), locs = d.l.flatMap((l) => (l[0] === "t" ? l[2].map((w) => w[0]) : [])).filter((x) => !x.endsWith(":e"));
   const [s0, a0] = (locs[0] || "1:1").split(":").map(Number), suras = [...new Set(locs.map((x) => +x.split(":")[0]))];
   const juz = JUZ.findIndex((_, j) => inJuz(j + 1, s0, a0)) + 1;
+  const pager = (where) => `<div class="row pager ${where}"><button class="btn" data-go="1" ${p >= m.pages ? "disabled" : ""} aria-label="Next page">‹ Next</button>
+      <label class="note">Page <input class="mpage-in" type="number" inputmode="numeric" min="1" max="${m.pages}" value="${p}"> of ${m.pages}</label>
+      <button class="btn" data-go="-1" ${p <= 1 ? "disabled" : ""} aria-label="Previous page">Previous ›</button></div>`;
   app.innerHTML = `<div class="row mbar">
       <a class="btn" href="#/s/${s0}/${a0}">← Word by word</a>
-      <div class="row pager"><button class="btn" id="mnext" ${p >= m.pages ? "disabled" : ""} aria-label="Next page">‹ Next</button>
-        <label class="note">Page <input id="mpage" type="number" inputmode="numeric" min="1" max="${m.pages}" value="${p}"> of ${m.pages}</label>
-        <button class="btn" id="mprev" ${p <= 1 ? "disabled" : ""} aria-label="Previous page">Previous ›</button></div>
       <button class="btn${tj ? " on" : ""}" id="mtj" aria-pressed="${tj}">Tajweed colours</button></div>
     ${tj ? `<div class="legend">${RULES.map(([k, en, ur, what]) => `<a class="chip" href="#/tajweed/${k}" title="${esc(what)}"><i class="t-${k}">●</i> ${en} <span class="ur">${ur}</span></a>`).join("")}<a class="chip guide" href="#/tajweed">What do the colours mean?</a></div>` : ""}
+    ${pager("above")}
     <section class="mpage${tj ? " tj" : ""}" dir="rtl" aria-label="Muṣḥaf page ${p}">
       <header><span class="ar">${suras.map((n) => esc(idx.surahs[n - 1].ar)).join(" · ")}</span><span class="note">Juz ${juz} · ${suras.map((n) => esc(idx.surahs[n - 1].en)).join(" · ")}</span></header>
       <div class="mlines" id="mlines">${d.l.map((l) => lineHTML(l, idx)).join("")}</div>
       <footer class="ar">${arN(p)}</footer>
     </section>
-    <div id="mpop"></div>
-    <p class="note">Swipe or use the arrow keys to turn the page. Tap a word for its meaning.</p>
-    <p class="note credit">Page layout: the Indo-Pak 16-line muṣḥaf (Taj Company), from QUL (Tarteel's Quranic Universal Library). Indo-Pak text and tajweed marks from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>; font: AlQuran IndoPak by QuranWBW.</p>`;
+    ${pager("below")}
+    <div id="sheetbox"></div>
+    <p class="note">Swipe or use the arrow keys to turn the page. Tap a word for its word card.</p>
+    <p class="note credit">Page layout: the Indo-Pak 15-line ḥifẓ muṣḥaf (Qudratullah), from QUL (Tarteel's Quranic Universal Library). Indo-Pak text and tajweed marks from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>; font: AlQuran IndoPak by QuranWBW.</p>`;
   fit();
   if (document.fonts) document.fonts.ready.then(fit);
   // keep the next page ready
   if (p < m.pages) page(p + 1).catch(() => {});
   const go = (q) => { if (q >= 1 && q <= m.pages && q !== p) location.hash = `#/mushaf/${q}`; };
   app.onclick = async (e) => {
-    if (e.target.closest("#mnext")) return go(p + 1);
-    if (e.target.closest("#mprev")) return go(p - 1);
+    const g = e.target.closest("[data-go]"); if (g) return go(p + +g.dataset.go);
     if (e.target.closest("#mtj")) { store.set("tajweed", !tj); return mushaf(String(p)); }
-    if (e.target.closest(".mpclose")) { $("#mpop").innerHTML = ""; app.querySelectorAll(".mw.sel").forEach((x) => x.classList.remove("sel")); return; }
+    const act = e.target.closest("[data-act]"); if (act) return cardAct(act, idx);
     const w = e.target.closest(".mw"); if (!w) return;
     app.querySelectorAll(".mw.sel").forEach((x) => x.classList.remove("sel")); w.classList.add("sel");
     const [ws, wa, wi] = w.dataset.loc.split(":").map(Number);
-    const sd = await withMeanings(ws).catch(() => null), word = sd?.ayahs.find((x) => x.n === wa)?.w[wi - 1];
-    const langs = state.langs.length ? state.langs : ["en", "ur"];
-    $("#mpop").innerHTML = `<div class="card mpop"><div class="row"><span class="ar" style="font-size:30px">${esc(word ? word.t : w.textContent)}</span><span class="note">${ws}:${wa}</span><button class="btn mpclose" aria-label="Close">×</button></div>
-      ${word ? langs.map((l) => `<div class="${l === "ur" ? "ur" : ""}" lang="${l}">${esc(meaningOf(word, l))}</div>`).join("") : ""}
-      <div class="row"><a class="btn primary" href="#/ayah/${ws}/${wa}/${wi}">Open this word's card</a><a class="btn" href="#/s/${ws}/${wa}">Read this āyah word by word</a></div></div>`;
+    const sd = await withMeanings(ws).catch(() => null), ay = sd?.ayahs.find((x) => x.n === wa);
+    if (ay && ay.w[wi - 1] && w.isConnected) mushafCard(ay.w, wi - 1, idx);
   };
-  app.onchange = (e) => { if (e.target.id === "mpage") go(Math.min(Math.max(1, +e.target.value || p), m.pages)); };
+  app.onchange = (e) => { if (e.target.classList.contains("mpage-in")) go(Math.min(Math.max(1, +e.target.value || p), m.pages)); };
   // swipe right for the next page, as a muṣḥaf's pages turn
   const pg = $(".mpage");
   pg.addEventListener("touchstart", (e) => { pg.dataset.x = e.touches[0].clientX; pg.dataset.y = e.touches[0].clientY; }, { passive: true });

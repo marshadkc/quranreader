@@ -1,13 +1,13 @@
-"""Download the Indo-Pak 16-line (Taj Company, 548 pages) mushaf layout from QUL (qul.tarteel.ai, Tarteel's
-Quranic Universal Library): for each page, its 16 lines and the words (sura:ayah:word) on each line.
+"""Download the Indo-Pak 15-line hifz mushaf layout (Qudratullah, 610 pages, every page ends on an āyah) from QUL (qul.tarteel.ai, Tarteel's
+Quranic Universal Library): for each page, its 15 lines and the words (sura:ayah:word) on each line.
 Writes tools/mushaf_layout.json, which tools/build_mushaf.py turns into data/mushaf/PPP.json.
 Raw pages are cached in tools/cache/qul/ (not committed)."""
 import json, os, re, sys, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "cache", "qul")
-URL = "https://qul.tarteel.ai/resources/mushaf-layout/11?page={p}"
-PAGES = 548
+URL = "https://qul.tarteel.ai/resources/mushaf-layout/12?page={p}"
+PAGES = 610
 
 def page_html(p):
     path = os.path.join(CACHE, f"{p:03d}.html")
