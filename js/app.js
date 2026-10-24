@@ -61,7 +61,7 @@ const LABEL = ["new", "learning", "almost", "known"];
 const VERSION_NO = 37; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
-  37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd)."],
+  37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd). Tap a word there for its meaning and its word card.", "Every place a word occurs: each āyah now has buttons to go to it in the sūrah or in the Mushaf.", "Word card: 📖 In the Mushaf shows the word on its muṣḥaf page."],
   35: ["The home page now says: Learn to read the Quran without translation."],
   34: ["The Word forms section on the word card is now a clear button: tap Show to open it.", "Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
   33: ["Form Switch: a new quiz that turns each word into another form: a verb into another person or tense, a noun into one, two or many (on every sūrah page).", "Two teams in Honeycomb can now ask word forms too.", "Word forms on the word card: how each verb and noun changes, with the easy trick for each.", "This notice, so you know when the app has updated."],
@@ -384,6 +384,7 @@ function sheetHTML(w, idx) {
     ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(w.r || "=" + norm(w.l))}" ${raw.get("formsOpen", false) ? "open" : ""}><summary><span class="lbl">Word forms<br><span class="note">${w.pos === "V" ? "How this verb changes: he, they, you… with the tricks" : "How this word changes: one, two, many…"}</span></span></summary><div class="fbody note">Loading…</div></details>` : ""}
     <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
       <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
+      <a class="btn" href="#/mushaf/s/${w.s}/${w.a}/${w.i + 1}">📖 In the Mushaf</a>
       <button class="btn" data-act="close">Close</button></div></div>`;
 }
 
@@ -621,7 +622,8 @@ async function wordSearch(raw, pick) {
   const hits = shown.map((g) => {
     const meta = idx.surahs[g.s - 1], ay = SURAH.get(g.s).ayahs[g.a - 1], first = Math.min(...g.w);
     return `<li class="hit"><a class="ref" href="#/ayah/${g.s}/${g.a}/${first}">${esc(meta.en)} ${g.s}:${g.a}</a>
-      <div class="ar">${ay.w.map((w, i) => (g.w.has(i + 1) ? `<mark>${esc(w.t)}</mark>` : esc(w.t))).join(" ")} <span class="vn">﴿${arN(g.a)}﴾</span></div></li>`;
+      <div class="ar">${ay.w.map((w, i) => (g.w.has(i + 1) ? `<mark>${esc(w.t)}</mark>` : esc(w.t))).join(" ")} <span class="vn">﴿${arN(g.a)}﴾</span></div>
+      <div class="row go"><a class="btn" href="#/s/${g.s}/${g.a}">Go to it in the sūrah</a><a class="btn" href="#/mushaf/s/${g.s}/${g.a}/${first}">📖 In the Mushaf</a></div></li>`;
   }).join("");
 
   app.innerHTML = head + `
@@ -1110,7 +1112,7 @@ async function route() {
       else if (h[2] === "roots") await rootChallenge(+h[1], h[3]);
       else if (h[2] === "forms") await formSwitch(+h[1], h[3]);
       else anchored = await reader(+h[1], +h[2] || 0);
-    } else if (h[0] === "mushaf") await mushaf(h[1], h[2], h[3]);
+    } else if (h[0] === "mushaf") anchored = await mushaf(h[1], h[2], h[3], h[4]);
     else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();

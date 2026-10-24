@@ -44,7 +44,8 @@ function fit() {
   box.style.fontSize = Math.min(40, Math.floor((40 * w * 0.985) / widest * 10) / 10) + "px";
 }
 
-export async function mushaf(arg, s, a) {
+// arg: a page number, or "s" with a sūrah, āyah and word (that word is marked on its page)
+export async function mushaf(arg, s, a, w) {
   const app = $("#app"), [m, idx] = await Promise.all([mindex(), index()]);
   let p = arg === "s" ? await pageOf(+s, +a || 1) : Math.min(Math.max(1, +arg || store.get("mushafPage", 1)), m.pages);
   if (arg === "s") history.replaceState(null, "", `#/mushaf/${p}`);
@@ -85,7 +86,7 @@ export async function mushaf(arg, s, a) {
     const langs = state.langs.length ? state.langs : ["en", "ur"];
     $("#mpop").innerHTML = `<div class="card mpop"><div class="row"><span class="ar" style="font-size:30px">${esc(word ? word.t : w.textContent)}</span><span class="note">${ws}:${wa}</span><button class="btn mpclose" aria-label="Close">×</button></div>
       ${word ? langs.map((l) => `<div class="${l === "ur" ? "ur" : ""}" lang="${l}">${esc(meaningOf(word, l))}</div>`).join("") : ""}
-      <a class="btn" href="#/ayah/${ws}/${wa}/${wi}">Open this word's card</a></div>`;
+      <div class="row"><a class="btn primary" href="#/ayah/${ws}/${wa}/${wi}">Open this word's card</a><a class="btn" href="#/s/${ws}/${wa}">Read this āyah word by word</a></div></div>`;
   };
   app.onchange = (e) => { if (e.target.id === "mpage") go(Math.min(Math.max(1, +e.target.value || p), m.pages)); };
   // swipe right for the next page, as a muṣḥaf's pages turn
@@ -96,6 +97,8 @@ export async function mushaf(arg, s, a) {
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx > 0 ? p + 1 : p - 1);
   });
   mushaf.go = go; mushaf.p = p;
+  const hit = arg === "s" && w && $(`.mw[data-loc="${+s}:${+a}:${+w}"]`);
+  if (hit) { hit.classList.add("found"); hit.scrollIntoView({ block: "center" }); return true; }
 }
 addEventListener("keydown", (e) => {
   if (!location.hash.startsWith("#/mushaf") || !mushaf.go || e.target.matches("input,select,textarea")) return;
