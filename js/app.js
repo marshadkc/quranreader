@@ -2,7 +2,7 @@
 // practice quiz, word parts and the Ayah Honeycomb.
 import { renderHive } from "./hive.js";
 import { formsOf, formsHTML, formLabel, formHL, trickOf, switchQuestion } from "./forms.js";
-import { mushaf } from "./mushaf.js";
+import { mushaf, tajweedGuide } from "./mushaf.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
@@ -58,9 +58,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 37; // keep in step with VERSION in sw.js
+const VERSION_NO = 38; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  38: ["Read in Mushaf now uses the 15-line ḥifẓ muṣḥaf (610 pages, every page ends on an āyah).", "Mushaf: tapping a word opens its word card right on the page, and Close brings you back to the same page.", "Mushaf: the page buttons sit just above and below the page.", "Tajweed colours guide: in the Mushaf, tap a colour or \"What do the colours mean?\" to see how each rule is read, with examples you can open on their page."],
   37: ["Read in Mushaf: tap 📖 Read in Mushaf beside the language buttons to read the Indo-Pak 16-line muṣḥaf, one page at a time, with tajweed in colour (ghunna, ikhfa, iqlab, idgham, qalqala, madd). Tap a word there for its meaning and its word card.", "Every place a word occurs: each āyah now has buttons to go to it in the sūrah or in the Mushaf.", "Word card: 📖 In the Mushaf shows the word on its muṣḥaf page."],
   35: ["The home page now says: Learn to read the Quran without translation."],
   34: ["The Word forms section on the word card is now a clear button: tap Show to open it.", "Honeycomb Two teams: with \"Meanings + Form Switch\", each team now gets a meaning question and a Form Switch question in turn, and nouns are asked too."],
@@ -384,7 +385,7 @@ function sheetHTML(w, idx) {
     ${w.pos === "V" || w.pos === "N" ? `<details class="forms" data-fkey="${esc(w.r || "=" + norm(w.l))}" ${raw.get("formsOpen", false) ? "open" : ""}><summary><span class="lbl">Word forms<br><span class="note">${w.pos === "V" ? "How this verb changes: he, they, you… with the tricks" : "How this word changes: one, two, many…"}</span></span></summary><div class="fbody note">Loading…</div></details>` : ""}
     <div class="btns">${hasMeaning(w) ? `<button class="btn primary" data-act="know">I know this</button><button class="btn" data-act="again">Show meaning again</button>` : ""}
       <a class="btn" href="#/word/${encodeURIComponent(norm(w.l))}/${encodeURIComponent(key)}">${w.r ? "Every word from this root" : "Every place it occurs"}</a>
-      <a class="btn" href="#/mushaf/s/${w.s}/${w.a}/${w.i + 1}">📖 In the Mushaf</a>
+      ${view.mushaf ? `<a class="btn" href="#/s/${w.s}/${w.a}">Read this āyah word by word</a>` : `<a class="btn" href="#/mushaf/s/${w.s}/${w.a}/${w.i + 1}">📖 In the Mushaf</a>`}
       <button class="btn" data-act="close">Close</button></div></div>`;
 }
 
@@ -403,49 +404,58 @@ function readingClick(e, idx) {
   const m = e.target.closest(".meaning");
   if (hidden && m) { m.classList.toggle("peek"); return; }
   const btns = () => app.querySelectorAll(".w");
-  const select = (k) => {
-    btns().forEach((b) => b.classList.toggle("sel", +b.dataset.k === k));
-    view.sel = k;
-    $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
-    const fd = $("#sheetbox .forms");
-    if (fd) {
-      const w = view.ws[k];
-      const fill = () => formsOf(fd.dataset.fkey).then((d) => {
-        if (!fd.isConnected) return;
-        const h = formsHTML(d, w, state.langs);
-        if (h) fd.querySelector(".fbody").outerHTML = `<div class="fbody">${h}</div>`; else fd.remove();
-      });
-      fd.ontoggle = () => raw.set("formsOpen", fd.open);
-      fill();
-    }
-    const box = $("#sheetbox .core");
-    if (box) {
-      const r = box.dataset.root;
-      rootOf(r).then((d) => {
-        if (!box.isConnected) return;
-        const show = () => { box.innerHTML = rootHTML(d, r, raw.get("dict", "m")); };
-        box.onchange = (e) => { if (e.target.dataset.dict !== undefined) { raw.set("dict", e.target.value); show(); } };
-        show();
-      });
-    }
-  };
   const act = e.target.closest("[data-act]");
   if (act) {
     const w = view.ws[view.sel];
-    if (act.dataset.act === "know") setLevel(w, lv(w) + 1);
-    if (act.dataset.act === "again") setLevel(w, 0);
-    if (act.dataset.act !== "close") {
-      btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.k === w.k) b.className = `w lv${hasMeaning(x) ? lv(x) : 0}`; });
-      if (view.prog) view.prog();
-    }
-    return select(null);
+    cardAct(act, idx);
+    if (act.dataset.act !== "close") btns().forEach((b) => { const x = view.ws[+b.dataset.k]; if (x.k === w.k) b.className = `w lv${hasMeaning(x) ? lv(x) : 0}`; });
+    return;
   }
   const b = e.target.closest(".w"); if (!b) return;
   const k = +b.dataset.k, w = view.ws[k];
   if (hidden && !b.classList.contains("peek")) { b.classList.add("peek"); return; }
   if (hasMeaning(w) && lv(w) === 3 && !b.classList.contains("peek")) { b.classList.add("peek"); setLevel(w, 2); return; }
-  select(k);
+  btns().forEach((x) => x.classList.toggle("sel", +x.dataset.k === k));
+  showCard(k, idx);
 }
+
+// The word card in #sheetbox for view.ws[k] (k null closes it). Used by the readers and the Mushaf.
+export function showCard(k, idx) {
+  view.sel = k;
+  if (k === null) app.querySelectorAll(".w.sel,.mw.sel").forEach((b) => b.classList.remove("sel"));
+  $("#sheetbox").innerHTML = k === null ? "" : sheetHTML(view.ws[k], idx);
+  const fd = $("#sheetbox .forms");
+  if (fd) {
+    const w = view.ws[k];
+    const fill = () => formsOf(fd.dataset.fkey).then((d) => {
+      if (!fd.isConnected) return;
+      const h = formsHTML(d, w, state.langs);
+      if (h) fd.querySelector(".fbody").outerHTML = `<div class="fbody">${h}</div>`; else fd.remove();
+    });
+    fd.ontoggle = () => raw.set("formsOpen", fd.open);
+    fill();
+  }
+  const box = $("#sheetbox .core");
+  if (box) {
+    const r = box.dataset.root;
+    rootOf(r).then((d) => {
+      if (!box.isConnected) return;
+      const show = () => { box.innerHTML = rootHTML(d, r, raw.get("dict", "m")); };
+      box.onchange = (e) => { if (e.target.dataset.dict !== undefined) { raw.set("dict", e.target.value); show(); } };
+      show();
+    });
+  }
+}
+// the card's buttons: I know this, Show meaning again, Close
+export function cardAct(act, idx) {
+  const w = view.ws[view.sel];
+  if (act.dataset.act === "know") setLevel(w, lv(w) + 1);
+  if (act.dataset.act === "again") setLevel(w, 0);
+  if (act.dataset.act !== "close" && view.prog) view.prog();
+  showCard(null, idx);
+}
+// the Mushaf opens a word's card under its page: the āyah's words become the card's words
+export function mushafCard(ws, k, idx) { view = { ws, sel: null, prog: null, mushaf: true }; showCard(k, idx); }
 
 // ---------- views ----------
 async function home() {
@@ -1113,6 +1123,7 @@ async function route() {
       else if (h[2] === "forms") await formSwitch(+h[1], h[3]);
       else anchored = await reader(+h[1], +h[2] || 0);
     } else if (h[0] === "mushaf") anchored = await mushaf(h[1], h[2], h[3], h[4]);
+    else if (h[0] === "tajweed") anchored = await tajweedGuide(h[1]);
     else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();
