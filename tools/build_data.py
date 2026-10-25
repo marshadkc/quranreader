@@ -15,6 +15,7 @@ Usage
   python3 tools/build_data.py            build everything
   python3 tools/build_data.py --list 112 print a surah's words, to help write its glosses
 """
+from ur_hi import ur_to_hi
 import collections
 import json
 import pathlib
@@ -357,6 +358,8 @@ def build():
                         wd["en"], wd["ur"] = en, ur
                         if len(his) == len(ws) and his[i]:
                             wd["hi"] = his[i]  # Hindi, where Quran.com has it for this word
+                        elif ur and (hu := ur_to_hi(ur)):
+                            wd["hi"], wd["hu"] = hu, 1  # else Al-Huda's Urdu in Hindi letters (tools/ur_hi.py)
                     glossed += len(ws)
             for wi, wd in enumerate(ws, 1):
                 wd["f"] = lemma_count[wd["l"]]
