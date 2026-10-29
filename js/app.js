@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 41; // keep in step with VERSION in sw.js
+const VERSION_NO = 42; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  42: ["Share this app: on the home page, send the link on WhatsApp in English, Urdu or Hindi, with two lines on how to add it to the home screen."],
   41: ["Hindi meanings for small words like في (में), من (से) and على (पर): about 6,700 words Quran.com has no Hindi for now show Al-Huda's Urdu meaning in Hindi letters, so Hindi quizzes no longer mix in English."],
   40: ["Hindi letters: the last word of each āyah is now written as it is read when you stop there, without the \"-\" (लिल्मुत्तक़ीन, हुदा)."],
   39: ["🌙 / ☀️ at the top switches between dark and light, whatever your phone is set to.", "Words in Hindi letters: above the āyāt, pick हिंदी लिपि to see how each Arabic word sounds written in Hindi, or Both to see it under the Arabic. With हिंदी लिपि the quizzes and the Honeycomb show the words in Hindi letters too.", "Mushaf pages now have a printed muṣḥaf's blue border, with the sūrah, para and page in frames."],
@@ -486,6 +487,18 @@ export function cardAct(act, idx) {
 export function mushafCard(ws, k, idx) { view = { ws, sel: null, prog: null, mushaf: true }; showCard(k, idx); }
 
 // ---------- views ----------
+// Sharing the app: a WhatsApp message with the link and two lines on adding it to the home screen, in the reader's language
+const SHARE = {
+  en: (u) => `Learn to read the Quran without translation, word by word. Free app: ${u}\nTo install on Android: open the link in Chrome, tap ⋮ and choose "Add to Home screen".\nOn iPhone: open it in Safari, tap Share and choose "Add to Home Screen".`,
+  ur: (u) => `قرآن کو بغیر ترجمے کے، لفظ بہ لفظ سمجھنا سیکھیں۔ مفت ایپ: ${u}\nاینڈرائیڈ پر انسٹال کرنے کے لیے: لنک Chrome میں کھولیں، ⋮ دبائیں اور "Add to Home screen" چنیں۔\nآئی فون پر: Safari میں کھولیں، Share دبائیں اور "Add to Home Screen" چنیں۔`,
+  hi: (u) => `क़ुरआन को बिना तर्जुमे के, लफ़्ज़-ब-लफ़्ज़ समझना सीखें। मुफ़्त ऐप: ${u}\nAndroid पर इंस्टॉल करने के लिए: लिंक Chrome में खोलें, ⋮ दबाएँ और "Add to Home screen" चुनें।\niPhone पर: Safari में खोलें, Share दबाएँ और "Add to Home Screen" चुनें।`,
+};
+const shareText = (l) => (SHARE[l] || SHARE.en)(new URL("./", location.href).href);
+const shareHTML = () => `<section class="card share"><div><strong>Share this app</strong><div class="note">Send the link on WhatsApp, with how to add it to the home screen.</div></div>
+  <div class="row">${["en", "ur", "hi"].map((l) => `<a class="btn${l === (state.langs[0] || "en") ? " primary" : ""}" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(shareText(l))}">📤 WhatsApp · ${LANG_NAME[l]}</a>`).join("")}
+  ${navigator.share ? `<button class="btn" id="shareany">Other apps…</button>` : ""}</div></section>`;
+document.addEventListener("click", (e) => { if (e.target.id === "shareany") navigator.share({ title: "Quran Word Reader", text: shareText(state.langs[0] || "en") }).catch(() => {}); });
+
 async function home() {
   const idx = await index(), p = await quranProgress(idx);
   const total = idx.surahs.reduce((t, s) => t + s.words, 0);
@@ -497,6 +510,7 @@ async function home() {
       <div class="row"><span>Words of the Quran you know</span><strong>${p.all.pct}%</strong></div>
       <div class="track">${barHTML(p.all)}</div>
     </section>
+    ${shareHTML()}
     <div class="row"><span class="note">Every right answer moves a word one step (the lighter bar); three steps and it is known. A word you know counts wherever it occurs. <a href="#/search">Search</a> finds any āyah, or every place a word occurs.</span></div>
     <ul class="list">
       ${idx.surahs.map((s) => {
