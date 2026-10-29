@@ -389,3 +389,11 @@ h1 small.note{font-size:14px;font-weight:400}
 .share{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
 .share .row{gap:8px;flex-wrap:wrap}
 .share .slides{flex-basis:100%;align-items:center}
+/* the buttons under an āyah, and the Why revealed card */
+.atools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.why .report{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.why .report p{margin:0;line-height:1.6}
+.why .report .ur{font-size:18px;line-height:2;direction:rtl}
+.why .report .ar{font-size:20px;line-height:1.9;margin:8px 0 0}
+.why .grade{font-size:12px}
+.why summary{cursor:pointer;color:var(--accent);font-size:14px}

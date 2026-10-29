@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 43; // keep in step with VERSION in sw.js
+const VERSION_NO = 44; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  44: ["📜 Why revealed: āyāt with an authentic report of why they were revealed now have a button beside Practise. It shows the event in your language, how strong the report is, and the Arabic of al-Suyūṭī's Lubāb al-Nuqūl."],
   43: ["Slides about the app in English, Urdu and Hindi: open them from the Share this app card on the home page, and the WhatsApp message now carries the slides link too."],
   42: ["Share this app: on the home page, send the link on WhatsApp in English, Urdu or Hindi, with two lines on how to add it to the home screen."],
   41: ["Hindi meanings for small words like في (में), من (से) and على (पर): about 6,700 words Quran.com has no Hindi for now show Al-Huda's Urdu meaning in Hindi letters, so Hindi quizzes no longer mix in English."],
@@ -315,11 +316,59 @@ const practiseLink = (n, a) => {
   const again = a <= upto(n), f = again ? a : upto(n) + 1;
   return `<a class="btn small practise-here" href="#/s/${n}/practise/${f}-${a}">Practise ${f === a ? `āyah ${a}${again ? " again" : ""}` : `āyāt ${f}–${a}`}</a>`;
 };
+// the buttons under an āyah, in one row
+const tools = (bs) => (bs.some(Boolean) ? `<div class="atools">${bs.join("")}</div>` : "");
+
+// ---------- why an āyah was revealed (asbāb al-nuzūl) ----------
+// Only reports al-Suyūṭī's Lubāb al-Nuqūl ties to al-Bukhārī or Muslim, or that he or a named imam grades sound,
+// translated into English, Urdu and Hindi (tools/build_asbab.py). data/asbab/index.json lists the āyāt that have
+// one (a report about several āyāt sits on the first); data/asbab/NNN.json holds a sūrah's reports.
+let WHY = null;
+const WHYS = new Map();
+const whyAyat = async (n) => new Set((await (WHY ||= json("data/asbab/index.json").catch(() => { WHY = null; return {}; })))[n] || []);
+const whyOf = (n) => { if (!WHYS.has(n)) WHYS.set(n, json(`data/asbab/${String(n).padStart(3, "0")}.json`).catch(() => { WHYS.delete(n); return null; })); return WHYS.get(n); };
+const whyButton = (a) => `<button class="btn small" data-why="${a}">📜 Why revealed</button>`;
+// how strong each report is, as al-Suyūṭī gives it
+const GRADE = {
+  bm: { en: "Ṣaḥīḥ: in al-Bukhārī and Muslim", ur: "صحیح: بخاری و مسلم", hi: "सहीह: बुख़ारी और मुस्लिम" },
+  b: { en: "Ṣaḥīḥ al-Bukhārī", ur: "صحیح بخاری", hi: "सहीह बुख़ारी" },
+  m: { en: "Ṣaḥīḥ Muslim", ur: "صحیح مسلم", hi: "सहीह मुस्लिम" },
+  s: { en: "al-Suyūṭī: ṣaḥīḥ chain", ur: "سیوطی: سند صحیح", hi: "सुयूती: सनद सहीह" },
+  h: { en: "al-Suyūṭī: ḥasan (good) chain", ur: "سیوطی: سند حسن", hi: "सुयूती: सनद हसन" },
+  j: { en: "al-Suyūṭī: jayyid (good) chain", ur: "سیوطی: سند جید", hi: "सुयूती: सनद जय्यिद" },
+  ts: { en: "al-Tirmidhī: ṣaḥīḥ", ur: "ترمذی: صحیح", hi: "तिर्मिज़ी: सहीह" },
+  th: { en: "al-Tirmidhī: ḥasan", ur: "ترمذی: حسن", hi: "तिर्मिज़ी: हसन" },
+  hk: { en: "al-Ḥākim: ṣaḥīḥ", ur: "حاکم: صحیح", hi: "हाकिम: सहीह" },
+};
+const WHY_TITLE = { en: "Why it was revealed", ur: "شانِ نزول", hi: "शाने नुज़ूल" };
+function whyHTML(n, a, list) {
+  const ls = state.langs.length ? state.langs : ["en"], l0 = ls[0];
+  const to = Math.max(a, ...list.map((r) => r.to || a));
+  return `<div class="sheet why" id="sheet">
+    <div class="top2"><div><div class="eyebrow">${n}:${a}${to > a ? `–${to}` : ""} · ${esc(WHY_TITLE.en)}</div>
+      ${l0 !== "en" ? `<strong lang="${l0}">${esc(WHY_TITLE[l0])}</strong>` : ""}</div>
+      <button class="btn small" data-whyclose>Close</button></div>
+    ${list.map((r) => `<div class="report">
+      ${ls.filter((l) => r[l]).map((l) => `<p class="${l}" lang="${l}">${esc(r[l])}</p>`).join("")}
+      <div>${r.g.map((g) => `<span class="chip grade" lang="${l0}">${esc(GRADE[g][l0])}</span>`).join(" ")}</div>
+      <details><summary>Show Arabic</summary><p class="ar" dir="rtl" lang="ar">${esc(r.ar)}</p></details></div>`).join("")}
+    <p class="note">From al-Suyūṭī's <i>Lubāb al-Nuqūl fī Asbāb al-Nuzūl</i>, keeping only reports he ties to al-Bukhārī or Muslim, or that he or a named imam grades sound. Translated from the Arabic with AI help; open Show Arabic to check.</p>
+  </div>`;
+}
+async function showWhy(n, a) {
+  view.sel = null;
+  app.querySelectorAll(".w.sel").forEach((b) => b.classList.remove("sel"));
+  const d = await whyOf(n), box = $("#sheetbox");
+  if (!box) return;
+  box.innerHTML = d && d[a] ? whyHTML(n, a, d[a]) : `<div class="sheet"><p>This couldn't load. Check your connection and try again.</p><button class="btn small" data-whyclose>Close</button></div>`;
+  box.scrollTop = 0;
+}
+
 // The āyah's full translation, one line per language; the reader's switch hides the ones not chosen
 const ayahLines = (a) => LANGS.filter((l) => a[l]).map((l) => `<span class="${l}" lang="${l}">${esc(a[l])}</span>`).join("");
 // the same, for places outside the reader: just the reader's languages (English and Urdu when meanings are hidden)
 export const ayahHTML = (a) => (state.langs.length ? state.langs : ["en", "ur"]).filter((l) => a[l]).map((l) => `<div class="${l}" lang="${l}">${esc(a[l])}</div>`).join("");
-function versesHTML(ayahs, idx, practiseIn) {
+function versesHTML(ayahs, idx, practiseIn, why = new Set()) {
   let k = 0;
   return `<div class="verses${versesClass(ayahs.flatMap((a) => a.w))}" id="verses">
     ${ayahs.map((a) => {
@@ -327,7 +376,7 @@ function versesHTML(ayahs, idx, practiseIn) {
       return `<article class="verse" id="a${a.n}"><div class="words">${a.w.map((w) => wordHTML(w, k++, idx)).join("")}
         <span class="vn">﴿${arN(a.n)}﴾</span></div>
         ${LANGS.some((l) => a[l]) ? `<div class="meaning${faded ? " faded" : ""}">${ayahLines(a)}</div>` : ""}
-        ${practiseIn && a.w.some(hasMeaning) ? practiseLink(practiseIn, a.n) : ""}
+        ${tools([practiseIn && a.w.some(hasMeaning) ? practiseLink(practiseIn, a.n) : "", why.has(a.n) ? whyButton(a.n) : ""])}
       </article>`;
     }).join("")}</div><div id="sheetbox"></div>`;
 }
@@ -430,6 +479,10 @@ function readingClick(e, idx) {
     return;
   }
   // Meanings hidden: the first tap on a word, or on an āyah's translation, shows just that one
+  const wy = e.target.closest("[data-why]");
+  if (wy) { showWhy(view.ws[0].s, +wy.dataset.why); return; }
+  if (e.target.closest("[data-whyclose]")) { showCard(null, idx); return; }
+  if (e.target.closest(".why")) return;
   const hidden = $("#verses").classList.contains("no-meaning");
   const m = e.target.closest(".meaning");
   if (hidden && m) { m.classList.toggle("peek"); return; }
@@ -531,7 +584,7 @@ async function home() {
 async function reader(n, focus) {
   const idx = await index(), meta = idx.surahs.find((s) => s.n === n);
   if (!meta) throw new Error(`there is no sūrah ${n}`);
-  const d = await withMeanings(n), ws = allWords(d), ready = ws.some(hasMeaning);
+  const d = await withMeanings(n), ws = allWords(d), ready = ws.some(hasMeaning), why = await whyAyat(n);
   const prog = () => {
     const p = progressOf(ws);
     $("#prog").innerHTML = `<span>Your progress in this sūrah${p.learning ? ` <small class="note">· ${p.learning.toLocaleString()} more on the way</small>` : ""}</span><strong>${p.pct}% · ${p.known.toLocaleString()} of ${ws.length.toLocaleString()} words known</strong>`;
@@ -549,7 +602,7 @@ async function reader(n, focus) {
     <div class="row"><span class="row">${langHTML(ws)}${scriptHTML()}<a class="btn mushaf-btn" href="#/mushaf/s/${n}/${focus || 1}">📖 Read in Mushaf</a></span>
       ${ready ? `<span class="row"><a class="btn primary" href="#/s/${n}/practise">Practise this sūrah</a><a class="btn" href="#/s/${n}/roots">Root challenge</a><a class="btn" href="#/s/${n}/forms">Form Switch</a></span>` : ""}</div>
     ${ready ? "" : `<div class="banner">Word meanings for this sūrah haven't loaded. Check your connection and try again. Tap any word to see its parts, base word and root.</div>`}
-    ${versesHTML(d.ayahs, idx, n)}
+    ${versesHTML(d.ayahs, idx, n, why)}
     ${fromQuranCom(d) ? CREDIT : ""}`;
   prog();
   app.onclick = (e) => readingClick(e, idx);
@@ -564,7 +617,7 @@ async function ayahView(s, a, w) {
     app.innerHTML = `<div class="banner">${meta ? `${esc(meta.en)} has ${meta.ayahs} āyāt, so there is no āyah ${a}.` : `There is no sūrah ${s}. The Quran has 114.`}</div><a class="btn" href="#/search">Back to search</a>`;
     return;
   }
-  const d = await withMeanings(s), ay = d.ayahs.find((x) => x.n === a);
+  const d = await withMeanings(s), ay = d.ayahs.find((x) => x.n === a), why = await whyAyat(s);
   const prev = a > 1 ? [s, a - 1] : s > 1 ? [s - 1, idx.surahs[s - 2].ayahs] : null;
   const next = a < meta.ayahs ? [s, a + 1] : s < 114 ? [s + 1, 1] : null;
   const nav = (p, label) => (p ? `<a class="btn" href="#/ayah/${p[0]}/${p[1]}">${label}</a>` : "<span></span>");
@@ -575,7 +628,7 @@ async function ayahView(s, a, w) {
       <div class="row"><h1>${esc(meta.en)} ${s}:${a}</h1><span class="ar" style="font-size:30px">${esc(meta.ar)}</span></div>
     </section>
     <div class="row">${langHTML(ay.w)}${scriptHTML()}<a class="btn" href="#/s/${s}/${a}">Open the full sūrah</a></div>
-    ${versesHTML([ay], idx)}
+    ${versesHTML([ay], idx, 0, why)}
     ${fromQuranCom(d) ? CREDIT : ""}
     <div class="row">${nav(prev, `← ${prev ? prev.join(":") : ""}`)}<a class="btn" href="#/search">Search again</a>${nav(next, `${next ? next.join(":") : ""} →`)}</div>`;
   app.onclick = (e) => readingClick(e, idx);
@@ -1094,6 +1147,7 @@ function about() {
     <div class="card">
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device, in the profile you are using.</p>
     <p class="note">Root meanings on the word card come from the classical dictionaries: Maqāyīs al-Lugha (Ibn Fāris), al-Mufradāt (al-Rāghib al-Iṣfahānī), Lisān al-ʿArab (Ibn Manẓūr), al-Ṣiḥāḥ (al-Jawharī), al-Qāmūs al-Muḥīṭ and Baṣāʾir Dhawī al-Tamyīz (al-Fīrūzābādī) and ʿUmdat al-Ḥuffāẓ (al-Samīn al-Ḥalabī). Choose a dictionary in the list on the word card and its meaning for the root shows in English and Urdu, with the phrase from its entry that the meaning rests on. The phrases are copied word for word from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī), which also has each full entry. The English and Urdu are translations of the dictionaries, made with AI help. al-Muʿjam al-Ishtiqāqī (Muḥammad Ḥasan Jabal) is still under copyright, so it is linked rather than quoted.</p>
+    <p class="note">📜 Why revealed: the reports come from al-Suyūṭī's <i>Lubāb al-Nuqūl fī Asbāb al-Nuzūl</i>, in the Arabic text of the <a href="https://github.com/OpenITI/0925AH" target="_blank" rel="noopener">OpenITI</a> corpus (from al-Maktaba al-Shāmila). Only reports al-Suyūṭī ties to Ṣaḥīḥ al-Bukhārī or Ṣaḥīḥ Muslim, or that he or a named imam (al-Tirmidhī, al-Ḥākim) grades ṣaḥīḥ or ḥasan, are shown, with that grading. Most āyāt have no such report, so most have no button. The English, Urdu and Hindi are translations made with AI help; the Arabic is always there to check.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <p class="note">Version ${VERSION_NO}. <button class="btn" id="upd">Check for update</button> <span class="note" id="updmsg"></span></p>
     <p><a class="btn" href="#/profile">Profiles and clearing progress</a></p>`;
