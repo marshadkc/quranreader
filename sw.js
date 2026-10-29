@@ -1,5 +1,5 @@
 // Offline support: the app shell is cached on install; data and fonts are cached as they are used.
-const VERSION = "qwr-v42";
+const VERSION = "qwr-v43";
 const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/hive.js", "js/forms.js", "js/mushaf.js", "js/translit.js", "manifest.webmanifest", "data/surahs.json", "icons/icon.svg", "icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {
@@ -15,6 +15,7 @@ self.addEventListener("fetch", (e) => {
   // Word meanings from api.quran.com are kept by the app itself for at most 7 days (Quran Foundation's terms), never here
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.hostname === "api.quran.com") return;
+  if (url.pathname.includes("/decks/")) return; // the slide decks are large and only shared, so they are never cached
   const shell = url.origin === location.origin && !url.pathname.includes("/data/") && !url.pathname.includes("/icons/") && !url.pathname.includes("/fonts/");
   e.respondWith(caches.open(VERSION).then(async (cache) => {
     const hit = await cache.match(e.request, { ignoreSearch: shell });

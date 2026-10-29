@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 42; // keep in step with VERSION in sw.js
+const VERSION_NO = 43; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  43: ["Slides about the app in English, Urdu and Hindi: open them from the Share this app card on the home page, and the WhatsApp message now carries the slides link too."],
   42: ["Share this app: on the home page, send the link on WhatsApp in English, Urdu or Hindi, with two lines on how to add it to the home screen."],
   41: ["Hindi meanings for small words like في (में), من (से) and على (पर): about 6,700 words Quran.com has no Hindi for now show Al-Huda's Urdu meaning in Hindi letters, so Hindi quizzes no longer mix in English."],
   40: ["Hindi letters: the last word of each āyah is now written as it is read when you stop there, without the \"-\" (लिल्मुत्तक़ीन, हुदा)."],
@@ -489,14 +490,18 @@ export function mushafCard(ws, k, idx) { view = { ws, sel: null, prog: null, mus
 // ---------- views ----------
 // Sharing the app: a WhatsApp message with the link and two lines on adding it to the home screen, in the reader's language
 const SHARE = {
-  en: (u) => `Learn to read the Quran without translation, word by word. Free app: ${u}\nTo install on Android: open the link in Chrome, tap ⋮ and choose "Add to Home screen".\nOn iPhone: open it in Safari, tap Share and choose "Add to Home Screen".`,
-  ur: (u) => `قرآن کو بغیر ترجمے کے، لفظ بہ لفظ سمجھنا سیکھیں۔ مفت ایپ: ${u}\nاینڈرائیڈ پر انسٹال کرنے کے لیے: لنک Chrome میں کھولیں، ⋮ دبائیں اور "Add to Home screen" چنیں۔\nآئی فون پر: Safari میں کھولیں، Share دبائیں اور "Add to Home Screen" چنیں۔`,
-  hi: (u) => `क़ुरआन को बिना तर्जुमे के, लफ़्ज़-ब-लफ़्ज़ समझना सीखें। मुफ़्त ऐप: ${u}\nAndroid पर इंस्टॉल करने के लिए: लिंक Chrome में खोलें, ⋮ दबाएँ और "Add to Home screen" चुनें।\niPhone पर: Safari में खोलें, Share दबाएँ और "Add to Home Screen" चुनें।`,
+  en: (u, d) => `Learn to read the Quran without translation, word by word. Free app: ${u}\nTo install on Android: open the link in Chrome, tap ⋮ and choose "Add to Home screen".\nOn iPhone: open it in Safari, tap Share and choose "Add to Home Screen".\nSlides about the app: ${d}`,
+  ur: (u, d) => `قرآن کو بغیر ترجمے کے، لفظ بہ لفظ سمجھنا سیکھیں۔ مفت ایپ: ${u}\nاینڈرائیڈ پر انسٹال کرنے کے لیے: لنک Chrome میں کھولیں، ⋮ دبائیں اور "Add to Home screen" چنیں۔\nآئی فون پر: Safari میں کھولیں، Share دبائیں اور "Add to Home Screen" چنیں۔\nایپ کا تعارف (سلائیڈز): ${d}`,
+  hi: (u, d) => `क़ुरआन को बिना तर्जुमे के, लफ़्ज़-ब-लफ़्ज़ समझना सीखें। मुफ़्त ऐप: ${u}\nAndroid पर इंस्टॉल करने के लिए: लिंक Chrome में खोलें, ⋮ दबाएँ और "Add to Home screen" चुनें।\niPhone पर: Safari में खोलें, Share दबाएँ और "Add to Home Screen" चुनें।\nऐप का तआरुफ़ (स्लाइड्स): ${d}`,
 };
-const shareText = (l) => (SHARE[l] || SHARE.en)(new URL("./", location.href).href);
-const shareHTML = () => `<section class="card share"><div><strong>Share this app</strong><div class="note">Send the link on WhatsApp, with how to add it to the home screen.</div></div>
+// slides about the app, one deck per language (decks/, made with tools outside the app): PDF to view, PowerPoint to present
+const deck = (l, ext = "pdf") => new URL(`decks/quran-word-reader-${l}.${ext}`, location.href).href;
+const shareText = (l) => (SHARE[l] || SHARE.en)(new URL("./", location.href).href, deck(SHARE[l] ? l : "en"));
+const shareHTML = () => `<section class="card share"><div><strong>Share this app</strong><div class="note">Send the link on WhatsApp, with how to add it to the home screen and slides about the app.</div></div>
   <div class="row">${["en", "ur", "hi"].map((l) => `<a class="btn${l === (state.langs[0] || "en") ? " primary" : ""}" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(shareText(l))}">📤 WhatsApp · ${LANG_NAME[l]}</a>`).join("")}
-  ${navigator.share ? `<button class="btn" id="shareany">Other apps…</button>` : ""}</div></section>`;
+  ${navigator.share ? `<button class="btn" id="shareany">Other apps…</button>` : ""}</div>
+  <div class="row slides"><span class="note">Slides about the app:</span>${["en", "ur", "hi"].map((l) => `<a class="btn small" target="_blank" rel="noopener" href="${deck(l)}">📊 ${LANG_NAME[l]}</a>`).join("")}
+    <span class="note">PowerPoint: ${["en", "ur", "hi"].map((l) => `<a href="${deck(l, "pptx")}" download>${LANG_NAME[l]}</a>`).join(" · ")}</span></div></section>`;
 document.addEventListener("click", (e) => { if (e.target.id === "shareany") navigator.share({ title: "Quran Word Reader", text: shareText(state.langs[0] || "en") }).catch(() => {}); });
 
 async function home() {
