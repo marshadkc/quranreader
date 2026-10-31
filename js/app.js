@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 45; // keep in step with VERSION in sw.js
+const VERSION_NO = 46; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  46: ["📜 Why revealed now starts with a short, plain summary of what happened, in your language, before the full report."],
   45: ["📜 Search has a list of every āyah with a reason of revelation, each named in a few words (for example Tayammum: ʿĀʾishah's lost necklace). Tap one to read its report.", "✉️ Found a mistake in a meaning, translation or report? The About page now says where to write."],
   44: ["📜 Why revealed: āyāt with an authentic report of why they were revealed now have a button beside Practise. It shows the event in your language, how strong the report is, and the Arabic of al-Suyūṭī's Lubāb al-Nuqūl."],
   43: ["Slides about the app in English, Urdu and Hindi: open them from the Share this app card on the home page, and the WhatsApp message now carries the slides link too."],
@@ -342,18 +343,25 @@ const GRADE = {
   hk: { en: "al-Ḥākim: ṣaḥīḥ", ur: "حاکم: صحیح", hi: "हाकिम: सहीह" },
 };
 const WHY_TITLE = { en: "Why it was revealed", ur: "شانِ نزول", hi: "शाने नुज़ूल" };
-function whyHTML(n, a, list) {
+// the summary is ours, not al-Suyūṭī's: Lubāb al-Nuqūl only lists the reports
+const WHY_BRIEF = { en: "In brief: a summary of the report below, not from the book", ur: "خلاصہ: نیچے دی گئی روایت کا خلاصہ، کتاب کے الفاظ نہیں", hi: "ख़ुलासा: नीचे दी गई रिवायत का ख़ुलासा, किताब के अल्फ़ाज़ नहीं" };
+const WHY_REPORT = { en: "The report", ur: "روایت", hi: "रिवायत" };
+// brief = [en, ur, hi]: a plain summary of the event, then each report in full
+function whyHTML(n, a, list, brief) {
   const ls = state.langs.length ? state.langs : ["en"], l0 = ls[0];
   const to = Math.max(a, ...list.map((r) => r.to || a));
   return `<div class="sheet why" id="sheet">
     <div class="top2"><div><div class="eyebrow">${n}:${a}${to > a ? `–${to}` : ""} · ${esc(WHY_TITLE.en)}</div>
       ${l0 !== "en" ? `<strong lang="${l0}">${esc(WHY_TITLE[l0])}</strong>` : ""}</div>
       <button class="btn small" data-whyclose>Close</button></div>
+    ${brief ? `<div class="brief"><div class="eyebrow" lang="${l0}">${esc(WHY_BRIEF[l0])}</div>
+      ${ls.map((l) => `<p class="${l}" lang="${l}">${esc(brief[LANGS.indexOf(l)])}</p>`).join("")}</div>
+    <div class="eyebrow" lang="${l0}">${esc(WHY_REPORT[l0])}</div>` : ""}
     ${list.map((r) => `<div class="report">
       ${ls.filter((l) => r[l]).map((l) => `<p class="${l}" lang="${l}">${esc(r[l])}</p>`).join("")}
       <div>${r.g.map((g) => `<span class="chip grade" lang="${l0}">${esc(GRADE[g][l0])}</span>`).join(" ")}</div>
       <details><summary>Show Arabic</summary><p class="ar" dir="rtl" lang="ar">${esc(r.ar)}</p></details></div>`).join("")}
-    <p class="note">From al-Suyūṭī's <i>Lubāb al-Nuqūl fī Asbāb al-Nuzūl</i>, keeping only reports he ties to al-Bukhārī or Muslim, or that he or a named imam grades sound. Translated from the Arabic with AI help; open Show Arabic to check.</p>
+    <p class="note">From al-Suyūṭī's <i>Lubāb al-Nuqūl fī Asbāb al-Nuzūl</i>, keeping only reports he ties to al-Bukhārī or Muslim, or that he or a named imam grades sound. The summary at the top retells these reports in plain words; both were written from the Arabic with AI help, so open Show Arabic to check.</p>
   </div>`;
 }
 async function showWhy(n, a) {
@@ -361,7 +369,7 @@ async function showWhy(n, a) {
   app.querySelectorAll(".w.sel").forEach((b) => b.classList.remove("sel"));
   const d = await whyOf(n), box = $("#sheetbox");
   if (!box) return;
-  box.innerHTML = d && d[a] ? whyHTML(n, a, d[a]) : `<div class="sheet"><p>This couldn't load. Check your connection and try again.</p><button class="btn small" data-whyclose>Close</button></div>`;
+  box.innerHTML = d && d[a] ? whyHTML(n, a, d[a], d.b?.[a]) : `<div class="sheet"><p>This couldn't load. Check your connection and try again.</p><button class="btn small" data-whyclose>Close</button></div>`;
   box.scrollTop = 0;
 }
 
@@ -1183,7 +1191,7 @@ function about() {
     <div class="card">
     <p class="note">Arabic text, word parts, base words and roots come from the Quranic Arabic Corpus (corpus.quran.com), version 0.4, as corrected in the open quran-morphology project. Search counts are counted from the same data. English and Urdu word meanings come from <a href="https://quran.com" target="_blank" rel="noopener">Quran.com</a>'s word-by-word translations; the Urdu meanings are by Dr. Farhat Hashmi (Al-Huda International). Quran data provided by Quran Foundation. They are stored in the app, so they work offline. Your progress stays on this device, in the profile you are using.</p>
     <p class="note">Root meanings on the word card come from the classical dictionaries: Maqāyīs al-Lugha (Ibn Fāris), al-Mufradāt (al-Rāghib al-Iṣfahānī), Lisān al-ʿArab (Ibn Manẓūr), al-Ṣiḥāḥ (al-Jawharī), al-Qāmūs al-Muḥīṭ and Baṣāʾir Dhawī al-Tamyīz (al-Fīrūzābādī) and ʿUmdat al-Ḥuffāẓ (al-Samīn al-Ḥalabī). Choose a dictionary in the list on the word card and its meaning for the root shows in English and Urdu, with the phrase from its entry that the meaning rests on. The phrases are copied word for word from the texts on <a href="https://tafsir.app" target="_blank" rel="noopener">tafsir.app</a> (al-Bāḥith al-Qurʾānī), which also has each full entry. The English and Urdu are translations of the dictionaries, made with AI help. al-Muʿjam al-Ishtiqāqī (Muḥammad Ḥasan Jabal) is still under copyright, so it is linked rather than quoted.</p>
-    <p class="note">📜 Why revealed: the reports come from al-Suyūṭī's <i>Lubāb al-Nuqūl fī Asbāb al-Nuzūl</i>, in the Arabic text of the <a href="https://github.com/OpenITI/0925AH" target="_blank" rel="noopener">OpenITI</a> corpus (from al-Maktaba al-Shāmila). Only reports al-Suyūṭī ties to Ṣaḥīḥ al-Bukhārī or Ṣaḥīḥ Muslim, or that he or a named imam (al-Tirmidhī, al-Ḥākim) grades ṣaḥīḥ or ḥasan, are shown, with that grading. Most āyāt have no such report, so most have no button. The English, Urdu and Hindi are translations made with AI help; the Arabic is always there to check.</p>
+    <p class="note">📜 Why revealed: the reports come from al-Suyūṭī's <i>Lubāb al-Nuqūl fī Asbāb al-Nuzūl</i>, in the Arabic text of the <a href="https://github.com/OpenITI/0925AH" target="_blank" rel="noopener">OpenITI</a> corpus (from al-Maktaba al-Shāmila). Only reports al-Suyūṭī ties to Ṣaḥīḥ al-Bukhārī or Ṣaḥīḥ Muslim, or that he or a named imam (al-Tirmidhī, al-Ḥākim) grades ṣaḥīḥ or ḥasan, are shown, with that grading. Most āyāt have no such report, so most have no button. The English, Urdu and Hindi translations, and the short summary of each event shown above them, were made with AI help; the Arabic is always there to check.</p>
     <p class="note">Install: open this page in Chrome (Android) or Safari (iPhone) and choose "Add to Home Screen". It works offline after the first visit.</p></div>
     <div class="card"><h2>Found a mistake?</h2>
       <p>Every meaning, translation and report in this app has been prepared with care and a sincere effort to be accurate. Still, mistakes are possible. If you find an error in a word meaning, a translation, a report of why an āyah was revealed, or anything else, please write to <a href="mailto:marshadkc@gmail.com?subject=Quran%20Word%20Reader">marshadkc@gmail.com</a>. Please mention the sūrah and āyah. May Allah reward you for helping.</p>

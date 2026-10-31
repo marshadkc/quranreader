@@ -404,3 +404,7 @@ h1 small.note{font-size:14px;font-weight:400}
 .whylist .t{font-weight:600;line-height:1.35}
 .whylist .t.ur{direction:rtl;font-size:18px;line-height:1.8;font-weight:500}
 .whylist .ref{font-size:13px;color:var(--muted)}
+.why .brief{background:var(--part-soft);border-radius:12px;padding:10px 14px;margin:6px 0 12px;display:flex;flex-direction:column;gap:6px}
+.why .brief p{margin:0;line-height:1.6;font-size:16px}
+.why .brief .ur{font-size:19px;line-height:2;direction:rtl}
+.why .eyebrow[lang="ur"]{font-size:15px;letter-spacing:0;text-transform:none}
