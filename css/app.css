@@ -397,3 +397,10 @@ h1 small.note{font-size:14px;font-weight:400}
 .why .report .ar{font-size:20px;line-height:1.9;margin:8px 0 0}
 .why .grade{font-size:12px}
 .why summary{cursor:pointer;color:var(--accent);font-size:14px}
+.whyfind{width:100%;max-width:420px;margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}
+.whylist{list-style:none;margin:0;padding:0;display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.whylist a{display:flex;flex-direction:column;gap:3px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);text-decoration:none;height:100%;box-sizing:border-box}
+.whylist a:hover{border-color:var(--accent)}
+.whylist .t{font-weight:600;line-height:1.35}
+.whylist .t.ur{direction:rtl;font-size:18px;line-height:1.8;font-weight:500}
+.whylist .ref{font-size:13px;color:var(--muted)}

@@ -7,7 +7,8 @@ for review.
 
 Step 2 (--build): turn tools/asbab_picks.json (the reviewed reports with their translations) into
 data/asbab/NNN.json, one file per sūrah: {"A": [{"to": last āyah, "ar": Arabic, "ref": Arabic
-source line, "g": grading key, "en"/"ur"/"hi": translation}]}. Every "ar" and "ref" must be found
+source line, "g": grading key, "en"/"ur"/"hi": translation}]}, plus data/asbab/list.json with a short
+title per āyah from tools/asbab_titles.py. Every "ar" and "ref" must be found
 word for word in the book, or the build stops.
 
 Input: OpenITI 0925AH, data/0911Suyuti/0911Suyuti.LubabNuqul/0911Suyuti.LubabNuqul.JK000436-ara1
@@ -120,7 +121,17 @@ def build():
     for s, v in out.items():
         (d / f"{s:03}.json").write_text(json.dumps(v, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (d / "index.json").write_text(json.dumps({s: sorted(map(int, v)) for s, v in sorted(out.items())}, separators=(",", ":")), encoding="utf-8")
-    print(len(picks), "reports in", len(out), "sūrahs")
+    # the list on the Search page: one row per āyah, [sūrah, āyah, last āyah, English, Urdu, Hindi title]
+    sys.path.insert(0, str(ROOT / "tools"))
+    from asbab_titles import T
+    rows = []
+    for s, v in sorted(out.items()):
+        for a, recs in sorted(v.items(), key=lambda x: int(x[0])):
+            if f"{s}:{a}" not in T: sys.exit(f"{s}:{a}: no title in tools/asbab_titles.py")
+            rows.append([s, int(a), max(r.get("to", int(a)) for r in recs), *T[f"{s}:{a}"]])
+    if len(rows) != len(T): sys.exit("tools/asbab_titles.py has titles for āyāt with no report")
+    (d / "list.json").write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(len(picks), "reports in", len(out), "sūrahs,", len(rows), "āyāt")
 
 
 if __name__ == "__main__":

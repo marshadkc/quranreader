@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 44; // keep in step with VERSION in sw.js
+const VERSION_NO = 45; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  45: ["📜 Search has a list of every āyah with a reason of revelation, each named in a few words (for example Tayammum: ʿĀʾishah's lost necklace). Tap one to read its report."],
   44: ["📜 Why revealed: āyāt with an authentic report of why they were revealed now have a button beside Practise. It shows the event in your language, how strong the report is, and the Arabic of al-Suyūṭī's Lubāb al-Nuqūl."],
   43: ["Slides about the app in English, Urdu and Hindi: open them from the Share this app card on the home page, and the WhatsApp message now carries the slides link too."],
   42: ["Share this app: on the home page, send the link on WhatsApp in English, Urdu or Hindi, with two lines on how to add it to the home screen."],
@@ -610,7 +611,7 @@ async function reader(n, focus) {
   if (el) { el.classList.add("flash"); el.scrollIntoView({ block: "start" }); return true; }
 }
 
-// One āyah on its own, from "Go to an āyah" or a search result. w = a word to open straight away.
+// One āyah on its own, from "Go to an āyah" or a search result. w = a word to open straight away, or "why" for its reports.
 async function ayahView(s, a, w) {
   const idx = await index(), meta = idx.surahs.find((x) => x.n === s);
   if (!meta || a < 1 || a > meta.ayahs) {
@@ -632,7 +633,8 @@ async function ayahView(s, a, w) {
     ${fromQuranCom(d) ? CREDIT : ""}
     <div class="row">${nav(prev, `← ${prev ? prev.join(":") : ""}`)}<a class="btn" href="#/search">Search again</a>${nav(next, `${next ? next.join(":") : ""} →`)}</div>`;
   app.onclick = (e) => readingClick(e, idx);
-  if (w && ay.w[w - 1]) app.querySelector(`.w[data-k="${w - 1}"]`).click();
+  if (w === "why") showWhy(s, a);
+  else if (w && ay.w[w - 1]) app.querySelector(`.w[data-k="${w - 1}"]`).click();
 }
 
 // ---------- search ----------
@@ -676,8 +678,42 @@ function searchWire(idx) {
 
 async function searchPage() {
   const idx = await index();
-  app.innerHTML = `<h1>Search</h1>${searchForms(idx)}`;
+  app.innerHTML = `<h1>Search</h1>${searchForms(idx)}
+    <section class="card search-grid">
+      <h2>📜 Why revealed</h2>
+      <p class="note">Āyāt with an authentic report of why they were revealed, each with the event in a few words.</p>
+      <div><a class="btn primary" href="#/why">List the āyāt</a></div>
+    </section>`;
   searchWire(idx);
+}
+
+// Every āyah with a reason of revelation, by a short title in the reader's languages
+async function whyList() {
+  const [idx, rows] = await Promise.all([index(), json("data/asbab/list.json")]);
+  const ls = state.langs.length ? state.langs : ["en"], col = { en: 3, ur: 4, hi: 5 };
+  app.innerHTML = `<h1>📜 Why revealed</h1>
+    <p class="note">${rows.length} āyāt have an authentic report of why they were revealed (al-Suyūṭī, Lubāb al-Nuqūl). Tap one to read it.</p>
+    <div class="row"><div class="seg" aria-label="Title languages">${LANGS.map((l) => `<button data-lang="${l}" aria-pressed="${ls.includes(l)}">${LANG_NAME[l]}</button>`).join("")}</div></div>
+    <input id="wf" class="whyfind" type="search" placeholder="Find, e.g. tayammum, ʿĀʾishah, 24" autocomplete="off">
+    <ol class="whylist">${rows.map(([s, a, to, ...t]) => {
+      const m = idx.surahs[s - 1];
+      return `<li data-f="${esc(`${t.join(" ")} ${m.en} ${s}:${a}`.toLowerCase())}"><a href="#/ayah/${s}/${a}/why">
+        ${ls.map((l) => `<span class="t ${l}" lang="${l}">${esc(t[col[l] - 3])}</span>`).join("")}
+        <span class="ref">${esc(m.en)} · ${s}:${a}${to > a ? `–${to}` : ""}</span></a></li>`;
+    }).join("")}</ol>`;
+  const fold = (x) => x.normalize("NFD").replace(/[\u0300-\u036f\u02bf\u02be]/g, "").toLowerCase();
+  app.oninput = (e) => {
+    if (e.target.id !== "wf") return;
+    const q = fold(e.target.value.trim());
+    app.querySelectorAll(".whylist li").forEach((li) => { li.hidden = q && !fold(li.dataset.f).includes(q); });
+  };
+  app.onclick = async (e) => {
+    const b = e.target.closest("[data-lang]");
+    if (!b) return;
+    const q = $("#wf").value;
+    pickLang(b.dataset.lang); await whyList();
+    if (q) { $("#wf").value = q; $("#wf").dispatchEvent(new Event("input", { bubbles: true })); }
+  };
 }
 
 // Word search: result 1 is the root and its family with counts, result 2 every āyah they occur in
@@ -1215,7 +1251,7 @@ themeIcon();
 const profileChip = () => { const p = profiles.list().find((x) => x.id === profiles.active()) || profiles.list()[0]; $("#who").textContent = p.name; };
 
 // ---------- router ----------
-const TABS = { search: "search", word: "search", ayah: "search", parts: "parts", hive: "hive", about: "about", profile: "about" };
+const TABS = { search: "search", word: "search", ayah: "search", why: "search", parts: "parts", hive: "hive", about: "about", profile: "about" };
 async function route() {
   const h = location.hash.replace(/^#\/?/, "").split("/").map((x) => { try { return decodeURIComponent(x); } catch { return x; } });
   const tab = TABS[h[0]] || (h[0] === "s" ? "" : "home");
@@ -1232,7 +1268,8 @@ async function route() {
       else anchored = await reader(+h[1], +h[2] || 0);
     } else if (h[0] === "mushaf") anchored = await mushaf(h[1], h[2], h[3], h[4]);
     else if (h[0] === "tajweed") anchored = await tajweedGuide(h[1]);
-    else if (h[0] === "ayah") await ayahView(+h[1], +h[2], +h[3] || 0);
+    else if (h[0] === "ayah") await ayahView(+h[1], +h[2], h[3] === "why" ? "why" : +h[3] || 0);
+    else if (h[0] === "why") await whyList();
     else if (h[0] === "word" && h[1]) await wordSearch(h[1], h[2]);
     else if (h[0] === "search") await searchPage();
     else if (h[0] === "parts") await parts();
