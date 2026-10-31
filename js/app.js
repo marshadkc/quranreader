@@ -343,7 +343,8 @@ const GRADE = {
   hk: { en: "al-Ḥākim: ṣaḥīḥ", ur: "حاکم: صحیح", hi: "हाकिम: सहीह" },
 };
 const WHY_TITLE = { en: "Why it was revealed", ur: "شانِ نزول", hi: "शाने नुज़ूल" };
-const WHY_BRIEF = { en: "In brief", ur: "خلاصہ", hi: "ख़ुलासा" };
+// the summary is ours, not al-Suyūṭī's: Lubāb al-Nuqūl only lists the reports
+const WHY_BRIEF = { en: "In brief: a summary of the report below, not from the book", ur: "خلاصہ: نیچے دی گئی روایت کا خلاصہ، کتاب کے الفاظ نہیں", hi: "ख़ुलासा: नीचे दी गई रिवायत का ख़ुलासा, किताब के अल्फ़ाज़ नहीं" };
 const WHY_REPORT = { en: "The report", ur: "روایت", hi: "रिवायत" };
 // brief = [en, ur, hi]: a plain summary of the event, then each report in full
 function whyHTML(n, a, list, brief) {
