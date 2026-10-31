@@ -8,7 +8,8 @@ for review.
 Step 2 (--build): turn tools/asbab_picks.json (the reviewed reports with their translations) into
 data/asbab/NNN.json, one file per sūrah: {"A": [{"to": last āyah, "ar": Arabic, "ref": Arabic
 source line, "g": grading key, "en"/"ur"/"hi": translation}]}, plus data/asbab/list.json with a short
-title per āyah from tools/asbab_titles.py. Every "ar" and "ref" must be found
+title per āyah from tools/asbab_titles.py; each sūrah file also has "b": {"A": [en, ur, hi]}, a plain
+summary of the event from tools/asbab_briefs.py. Every "ar" and "ref" must be found
 word for word in the book, or the build stops.
 
 Input: OpenITI 0925AH, data/0911Suyuti/0911Suyuti.LubabNuqul/0911Suyuti.LubabNuqul.JK000436-ara1
@@ -118,8 +119,12 @@ def build():
     d = ROOT / "data/asbab"
     d.mkdir(exist_ok=True)
     for f in d.glob("*.json"): f.unlink()
+    # a plain summary of the event per āyah, under "b": {"A": [English, Urdu, Hindi]}
+    sys.path.insert(0, str(ROOT / "tools"))
+    from asbab_briefs import B
     for s, v in out.items():
-        (d / f"{s:03}.json").write_text(json.dumps(v, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        if any(f"{s}:{a}" not in B for a in v): sys.exit(f"sūrah {s}: an āyah has no summary in tools/asbab_briefs.py")
+        (d / f"{s:03}.json").write_text(json.dumps({**v, "b": {a: list(B[f"{s}:{a}"]) for a in v}}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (d / "index.json").write_text(json.dumps({s: sorted(map(int, v)) for s, v in sorted(out.items())}, separators=(",", ":")), encoding="utf-8")
     # the list on the Search page: one row per āyah, [sūrah, āyah, last āyah, English, Urdu, Hindi title]
     sys.path.insert(0, str(ROOT / "tools"))
