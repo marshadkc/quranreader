@@ -72,7 +72,7 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 46; // keep in step with VERSION in sw.js
+const VERSION_NO = 47; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
   46: ["📜 Why revealed now starts with a short, plain summary of what happened, in your language, before the full report."],
