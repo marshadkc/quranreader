@@ -408,3 +408,12 @@ h1 small.note{font-size:14px;font-weight:400}
 .why .brief p{margin:0;line-height:1.6;font-size:16px}
 .why .brief .ur{font-size:19px;line-height:2;direction:rtl}
 .why .eyebrow[lang="ur"]{font-size:15px;letter-spacing:0;text-transform:none}
+
+/* 🌐 button in the top bar on reading pages: the meaning and script switches, reachable at any scroll position */
+.langbtn{flex-shrink:0;margin-right:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px;font-size:14px;cursor:pointer;line-height:1.3;white-space:nowrap}
+.langbtn[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
+.langpop{position:absolute;top:calc(100% + 6px);right:12px;z-index:30;display:grid;gap:6px;justify-items:start;max-width:calc(100vw - 24px);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.langpop .seg{flex-wrap:wrap}
+@media (max-width:440px){.langbtn{margin-right:8px;padding:3px 8px;font-size:13px}}
+@media (max-width:440px){.top{gap:8px;padding:10px 12px}.langbtn,.who,.theme{margin-right:0}.who{max-width:80px}}
+@media (max-width:340px){.who{max-width:42px}}
