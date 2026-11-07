@@ -72,9 +72,10 @@ export const lv = (w) => state.level[w.k] || 0;
 export const setLevel = (w, n) => { state.level[w.k] = Math.max(0, Math.min(3, n)); store.set("shape", state.level); };
 export function addHoney(n) { state.honey += n; store.set("honey", state.honey); $("#jar").textContent = state.honey; }
 const LABEL = ["new", "learning", "almost", "known"];
-const VERSION_NO = 47; // keep in step with VERSION in sw.js
+const VERSION_NO = 48; // keep in step with VERSION in sw.js
 // What's new, shown once after the app updates on a device (newest first; add a line with each version)
 const CHANGES = {
+  48: ["🌐 The meaning language and script switches now stay in reach: tap the 🌐 button in the top bar anywhere in a long sūrah, no need to scroll back up."],
   46: ["📜 Why revealed now starts with a short, plain summary of what happened, in your language, before the full report."],
   45: ["📜 Search has a list of every āyah with a reason of revelation, each named in a few words (for example Tayammum: ʿĀʾishah's lost necklace). Tap one to read its report.", "✉️ Found a mistake in a meaning, translation or report? The About page now says where to write."],
   44: ["📜 Why revealed: āyāt with an authentic report of why they were revealed now have a button beside Practise. It shows the event in your language, how strong the report is, and the Arabic of al-Suyūṭī's Lubāb al-Nuqūl."],
@@ -469,24 +470,50 @@ function sheetHTML(w, idx) {
       <button class="btn" data-act="close">Close</button></div></div>`;
 }
 
-// Click handling shared by the sūrah reader and the single-āyah view. Updates in place so long sūrahs stay fast.
-function readingClick(e, idx) {
+// The meaning-language and script switches. They sit above the āyāt and also behind the 🌐 button in the top bar,
+// so a reader deep in a long sūrah can switch without scrolling back up. Every copy is redrawn on a change.
+function switchClick(e, idx) {
   const lb = e.target.closest("[data-lang]");
   if (lb) {
     pickLang(lb.dataset.lang);
-    lb.closest(".seg").outerHTML = langHTML(view.ws);
+    redrawSwitches();
     $("#verses").className = "verses" + versesClass(view.ws);
     app.querySelectorAll(".peek").forEach((x) => x.classList.remove("peek"));
-    return;
+    return true;
   }
   const sb = e.target.closest("[data-script]");
   if (sb) {
     state.script = sb.dataset.script; store.set("script", state.script);
-    sb.closest(".seg").outerHTML = scriptHTML();
+    redrawSwitches();
     app.querySelectorAll(".w").forEach((b) => { b.querySelector(".face").outerHTML = wordFace(view.ws[+b.dataset.k]); });
     if (view.sel !== null) showCard(view.sel, idx);
-    return;
+    return true;
   }
+  return false;
+}
+function redrawSwitches() {
+  document.querySelectorAll('.seg[aria-label="Meaning languages"]').forEach((x) => (x.outerHTML = langHTML(view.ws)));
+  document.querySelectorAll('.seg[aria-label="Show the words in"]').forEach((x) => (x.outerHTML = scriptHTML()));
+  langChip();
+}
+const LANG_SHORT = { en: "EN", ur: "اردو", hi: "हिंदी" };
+const langBtn = $("#langbtn"), langPop = $("#langpop");
+function langChip() { const ls = readLangs(view.ws); langBtn.textContent = "🌐 " + (ls.length ? ls.map((l) => LANG_SHORT[l]).join(" · ") : "None"); }
+function closeLangPop() { langPop.hidden = true; langBtn.setAttribute("aria-expanded", "false"); }
+// on = a reading page (sūrah or single āyah) is showing; the button is hidden everywhere else
+function readerBar(on) { langBtn.hidden = !on; closeLangPop(); if (on) langChip(); }
+langBtn.onclick = () => {
+  if (!langPop.hidden) return closeLangPop();
+  langPop.innerHTML = `<div class="eyebrow">Meanings</div>${langHTML(view.ws)}<div class="eyebrow">Words in</div>${scriptHTML()}`;
+  langPop.hidden = false; langBtn.setAttribute("aria-expanded", "true");
+};
+langPop.onclick = (e) => switchClick(e, view.idx);
+document.addEventListener("click", (e) => { if (!langPop.hidden && !e.composedPath().some((x) => x === langPop || x === langBtn)) closeLangPop(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !langPop.hidden) { closeLangPop(); langBtn.focus(); } });
+
+// Click handling shared by the sūrah reader and the single-āyah view. Updates in place so long sūrahs stay fast.
+function readingClick(e, idx) {
+  if (switchClick(e, idx)) return;
   // Meanings hidden: the first tap on a word, or on an āyah's translation, shows just that one
   const wy = e.target.closest("[data-why]");
   if (wy) { showWhy(view.ws[0].s, +wy.dataset.why); return; }
@@ -600,7 +627,8 @@ async function reader(n, focus) {
     $("#progfill").style.width = p.pct + "%";
     $("#progfillway").style.width = p.way + "%";
   };
-  view = { ws, sel: null, prog };
+  view = { ws, sel: null, prog, idx };
+  readerBar(true);
   app.innerHTML = `
     <section class="progress">
       <div class="eyebrow">Sūrah ${n} · ${meta.ayahs} āyāt · ${meta.words.toLocaleString()} words</div>
@@ -630,7 +658,8 @@ async function ayahView(s, a, w) {
   const prev = a > 1 ? [s, a - 1] : s > 1 ? [s - 1, idx.surahs[s - 2].ayahs] : null;
   const next = a < meta.ayahs ? [s, a + 1] : s < 114 ? [s + 1, 1] : null;
   const nav = (p, label) => (p ? `<a class="btn" href="#/ayah/${p[0]}/${p[1]}">${label}</a>` : "<span></span>");
-  view = { ws: ay.w, sel: null, prog: null };
+  view = { ws: ay.w, sel: null, prog: null, idx };
+  readerBar(true);
   app.innerHTML = `
     <section class="progress">
       <div class="eyebrow">Sūrah ${s} · āyah ${a} of ${meta.ayahs} · ${ay.w.length} words</div>
@@ -1270,6 +1299,7 @@ async function route() {
   document.querySelectorAll(".tabs a").forEach((a) => (a.dataset.tab === tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   route.surah = h[0] === "s" || h[0] === "ayah" ? +h[1] || null : null;
   activeSurah(route.surah);
+  readerBar(false);
   app.onclick = null; app.onsubmit = null; app.oninput = null; app.onchange = null;
   let anchored = false;
   try {
